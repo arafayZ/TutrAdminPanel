@@ -1,7 +1,3 @@
-Here is a clear, professional `README.md` file designed specifically for your **TUTR Admin Console** project. You can copy and paste this directly into a `README.md` file in your repository root.
-
----
-
 # 🎓 TUTR - Admin Console
 
 A modern, responsive, and intuitive administration dashboard for the **TUTR** network built with **React**, **Tailwind CSS**, and **React Router**. This console enables administrators to manage tutors, verify credentials, monitor platform statistics, oversee students, and manage course configurations across all device types.
