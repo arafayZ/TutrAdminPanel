@@ -20,3 +20,9 @@ A modern, responsive, and intuitive administration dashboard for the **TUTR** ne
 * **Styling:** Tailwind CSS
 * **Routing:** React Router v6
 * **Icons:** Inline SVG Icons
+
+---
+
+# 🔒 TUTR - Admin Console *(Private Repository)*
+
+> **CONFIDENTIAL:** This repository contains proprietary code and assets for the **TUTR** administrative platform. Unauthorized copying, distribution, or usage of any code or design assets within this repository is strictly prohibited.
