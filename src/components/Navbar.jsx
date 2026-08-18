@@ -14,10 +14,10 @@ const Navbar = ({
   const navigate = useNavigate();
 
   return (
-    <header className="flex items-center justify-between px-8 py-4 bg-white border-b border-gray-200 sticky top-0 z-10">
+    <header className="flex items-center justify-between gap-3 pl-16 pr-4 py-3 md:px-8 md:py-4 bg-white border-b border-gray-200 sticky top-0 z-20">
       
       {/* Brand Logo -> Routes to Dashboard */}
-      <div className="w-48 flex items-center">
+      <div className="hidden sm:flex md:w-48 items-center shrink-0">
         <img 
           src={AppIcon} 
           alt="TUTR Logo" 
@@ -27,7 +27,7 @@ const Navbar = ({
       </div>
 
       {/* Search Input */}
-      <div className="flex-1 max-w-md mx-8">
+      <div className="flex-1 min-w-0 max-w-md sm:mx-4 md:mx-8">
         <div className="relative w-full">
           <input
             type="text"
@@ -40,7 +40,7 @@ const Navbar = ({
       </div>
 
       {/* Notifications & Admin Profile */}
-      <div className="flex items-center justify-end gap-4">
+      <div className="flex items-center justify-end gap-2 sm:gap-4 shrink-0">
         
         {/* Notifications Button */}
         <button 
@@ -57,16 +57,16 @@ const Navbar = ({
         {/* Clickable Admin Profile -> Routes to Settings */}
         <div 
           onClick={() => navigate('/settings')}
-          className="flex items-center gap-2.5 pl-2 border-l border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
+          className="flex items-center gap-2.5 sm:pl-2 sm:border-l border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
         >
-          <div className="text-right">
+          <div className="text-right hidden sm:block">
             <p className="text-xs font-bold leading-tight">{user.name}</p>
             <p className="text-[10px] text-gray-400 uppercase tracking-wide">{user.role}</p>
           </div>
           <img 
             src={DisplayPicture}
             alt="User Avatar" 
-            className="w-8 h-8 rounded-full object-cover border border-gray-200" 
+            className="w-8 h-8 rounded-full object-cover border border-gray-200 shrink-0" 
           />
         </div>
       </div>

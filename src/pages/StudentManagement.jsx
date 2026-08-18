@@ -349,7 +349,7 @@ const StudentManagement = () => {
         {viewState === 'notifications' ? (
           <NotificationsPage onBack={() => setViewState('dashboard')} />
         ) : (
-          <div className="p-8 max-w-6xl mx-auto w-full space-y-6">
+          <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto w-full space-y-6">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
@@ -424,8 +424,8 @@ const StudentManagement = () => {
             </div>
 
             {/* Students Table */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
-              <table className="w-full text-left border-collapse text-xs">
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-x-auto">
+              <table className="w-full min-w-[640px] text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/50 text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">
                     <th className="py-4 px-6">STUDENTS</th>

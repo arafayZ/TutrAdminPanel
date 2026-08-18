@@ -387,7 +387,7 @@ const ReviewsPage = () => {
         {viewState === 'notifications' ? (
           <NotificationsPage onBack={() => setViewState('reviews')} />
         ) : (
-          <div className="p-8 max-w-7xl mx-auto w-full space-y-6">
+          <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900 tracking-tight">

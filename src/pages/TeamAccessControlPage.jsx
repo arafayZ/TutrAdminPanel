@@ -202,7 +202,7 @@ const TeamAccessControlPage = () => {
         />
 
         {/* Page Content */}
-        <div className="p-8 max-w-7xl mx-auto w-full space-y-6">
+        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
           {/* Header Section */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
@@ -342,7 +342,7 @@ const TeamAccessControlPage = () => {
 
             {/* Table Container */}
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full min-w-[560px] text-left border-collapse">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/50 text-[10px] uppercase font-extrabold tracking-wider text-gray-400">
                     <th className="py-3 px-6">User</th>

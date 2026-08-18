@@ -101,7 +101,7 @@ const Dashboard = () => {
         {viewState === 'notifications' ? (
           <NotificationsPage />
         ) : (
-          <div className="p-8 space-y-8">
+          <div className="p-4 sm:p-6 lg:p-8 space-y-8">
             
             {/* Dynamic Greeting Heading */}
             <div>
@@ -112,7 +112,7 @@ const Dashboard = () => {
             </div>
 
             {/* Stat Cards */}
-            <div className="grid grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
               <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between">
                 <div className="flex justify-between items-start">
                   <div className="p-2.5 bg-gray-100 rounded-xl">
@@ -166,8 +166,8 @@ const Dashboard = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-8">
-              <div className="col-span-2 space-y-8">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 sm:gap-8">
+              <div className="xl:col-span-2 space-y-6 sm:space-y-8">
                 
                 {/* Registrations Chart */}
                 <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs">
@@ -237,7 +237,7 @@ const Dashboard = () => {
                   </div>
 
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full min-w-[560px] text-left border-collapse">
                       <thead>
                         <tr className="border-b border-gray-100 text-[10px] font-bold uppercase text-gray-400">
                           <th className="py-3 px-2">USER</th>

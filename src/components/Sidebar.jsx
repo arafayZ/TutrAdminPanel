@@ -8,6 +8,7 @@ const Sidebar = ({ activePage = '', onNavigateDashboard }) => {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progressText, setProgressText] = useState('');
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   // Retrieve logged-in admin details from local storage or context
   const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
@@ -18,6 +19,7 @@ const Sidebar = ({ activePage = '', onNavigateDashboard }) => {
       onNavigateDashboard();
     }
     navigate(item.path);
+    setMobileOpen(false);
   };
 
   const handleConfirmLogout = () => {
@@ -150,11 +152,45 @@ const Sidebar = ({ activePage = '', onNavigateDashboard }) => {
 
   return (
     <>
-      <aside className="w-64 bg-black text-white flex flex-col justify-between p-6 shrink-0 h-screen">
+      {/* Mobile hamburger trigger */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="md:hidden fixed top-3 left-3 z-30 p-2 bg-black text-white rounded-lg shadow-lg cursor-pointer"
+        aria-label="Open menu"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"/>
+        </svg>
+      </button>
+
+      {/* Mobile backdrop */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      <aside
+        className={`w-64 bg-black text-white flex flex-col justify-between p-6 shrink-0 h-screen fixed md:static inset-y-0 left-0 z-50 overflow-y-auto transform transition-transform duration-300 ease-in-out ${
+          mobileOpen ? 'translate-x-0' : '-translate-x-full'
+        } md:translate-x-0`}
+      >
         <div>
-          <div className="mb-10">
-            <h1 className="text-xl font-bold tracking-widest uppercase">TUTR</h1>
-            <p className="text-[9px] tracking-[0.2em] text-gray-400 uppercase">Admin Console</p>
+          <div className="mb-10 flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-bold tracking-widest uppercase">TUTR</h1>
+              <p className="text-[9px] tracking-[0.2em] text-gray-400 uppercase">Admin Console</p>
+            </div>
+            <button
+              onClick={() => setMobileOpen(false)}
+              className="md:hidden p-1 text-gray-400 hover:text-white cursor-pointer"
+              aria-label="Close menu"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </button>
           </div>
 
           <nav className="space-y-1">
@@ -194,7 +230,7 @@ const Sidebar = ({ activePage = '', onNavigateDashboard }) => {
           {/* Help Center & Logout */}
           <div className="space-y-1 text-xs">
             <button
-              onClick={() => navigate('/help')}
+              onClick={() => { navigate('/help'); setMobileOpen(false); }}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-xs transition-colors w-full text-left cursor-pointer ${
                 location.pathname === '/help' || activePage.toLowerCase() === 'help'
                   ? 'bg-[#1F1F1F] text-white'

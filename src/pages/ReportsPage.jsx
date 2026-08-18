@@ -139,7 +139,7 @@ const ReportsPage = () => {
         {viewState === 'notifications' ? (
           <NotificationsPage onBack={() => setViewState('reports')} />
         ) : (
-          <div className="p-8 max-w-7xl mx-auto w-full space-y-6">
+          <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
             {/* Page Header */}
             <div>
               <h2 className="text-2xl font-bold text-gray-900 tracking-tight">

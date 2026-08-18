@@ -68,7 +68,7 @@ const NotificationsPage = () => {
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         <Navbar />
 
-        <main className="p-8 font-sans text-gray-900">
+        <main className="p-4 sm:p-6 lg:p-8 font-sans text-gray-900">
           <div className="max-w-4xl mx-auto space-y-6">
             {/* Header */}
             <div className="flex items-center justify-between">

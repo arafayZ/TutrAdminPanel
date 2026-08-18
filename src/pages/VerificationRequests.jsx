@@ -474,7 +474,7 @@ const VerificationRequests = () => {
                 </header>
 
         {/* Content Body */}
-        <div className="p-8 max-w-7xl mx-auto w-full space-y-6">
+        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
           
           {/* Section Header & Tab Bar */}
           <div className="flex items-center justify-between">
@@ -568,7 +568,7 @@ const VerificationRequests = () => {
                       <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-3">
                         VERIFICATION DOCUMENTS
                       </h4>
-                      <div className="grid grid-cols-3 gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         {item.documents.map((doc) => {
                           if (doc.type === 'image') {
                             return (
@@ -733,7 +733,7 @@ const VerificationRequests = () => {
 
             {/* Detailed Info Grid */}
             <div className="py-5 space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="bg-gray-50 p-3 rounded-2xl border border-gray-100">
                   <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-0.5">Email</span>
                   <span className="font-semibold text-gray-800 break-all">{selectedUser.email || 'N/A'}</span>
@@ -744,7 +744,7 @@ const VerificationRequests = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="bg-gray-50 p-3 rounded-2xl border border-gray-100">
                   <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-0.5">Experience</span>
                   <span className="font-semibold text-gray-800">{selectedUser.experience || '3+ Years'}</span>

@@ -245,7 +245,7 @@ const BlockedPage = () => {
         {viewState === 'notifications' ? (
           <NotificationsPage onBack={() => setViewState('blocked')} />
         ) : (
-          <div className="p-8 max-w-7xl mx-auto w-full space-y-6">
+          <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
@@ -315,7 +315,7 @@ const BlockedPage = () => {
 
               {/* Table */}
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
+                <table className="w-full min-w-[560px] text-left text-xs">
                   <thead>
                     <tr className="bg-gray-50/80 text-[10px] font-extrabold uppercase text-gray-400 tracking-wider border-b border-gray-100">
                       <th className="py-3 px-6">User</th>
