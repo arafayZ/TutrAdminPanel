@@ -1,9 +1,17 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { generateFullAppPDF } from '../utils/generateReport';
 
-const Sidebar = ({ activePage = '', onNavigateDashboard, onGenerateReport }) => {
+const Sidebar = ({ activePage = '', onNavigateDashboard }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [progressText, setProgressText] = useState('');
+
+  // Retrieve logged-in admin details from local storage or context
+  const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const loggedInUserName = storedUser.name || 'Abdul Rafay';
 
   const handleNavigation = (item) => {
     if (item.id === 'dashboard' && onNavigateDashboard) {
@@ -14,9 +22,25 @@ const Sidebar = ({ activePage = '', onNavigateDashboard, onGenerateReport }) => 
 
   const handleConfirmLogout = () => {
     setShowLogoutModal(false);
-    // Clear storage/tokens if necessary
     localStorage.clear();
     navigate('/login');
+  };
+
+  const handleGenerateReport = async () => {
+    setIsGenerating(true);
+    const initialRoute = location.pathname;
+
+    try {
+      // Calls generator with navigation, progress setter, and logged-in admin name
+      await generateFullAppPDF(navigate, setProgressText, loggedInUserName);
+    } catch (error) {
+      console.error('Failed to generate full console PDF report:', error);
+    } finally {
+      // Restore user to their original active route
+      navigate(initialRoute);
+      setIsGenerating(false);
+      setProgressText('');
+    }
   };
 
   const navItems = [
@@ -82,12 +106,32 @@ const Sidebar = ({ activePage = '', onNavigateDashboard, onGenerateReport }) => 
       ),
     },
     {
+      id: 'reviews',
+      label: 'REVIEWS',
+      path: '/reviews',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+        </svg>
+      ),
+    },
+    {
       id: 'blocked',
       label: 'BLOCKED',
       path: '/blocked',
       icon: (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+        </svg>
+      ),
+    },
+    {
+      id: 'team',
+      label: 'TEAM & ACCESS CONTROL',
+      path: '/team',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
         </svg>
       ),
     },
@@ -115,7 +159,10 @@ const Sidebar = ({ activePage = '', onNavigateDashboard, onGenerateReport }) => 
 
           <nav className="space-y-1">
             {navItems.map((item) => {
-              const isActive = activePage === item.id;
+              const isActive =
+                location.pathname === item.path ||
+                activePage.toLowerCase() === item.id.toLowerCase();
+
               return (
                 <button
                   key={item.id}
@@ -135,18 +182,21 @@ const Sidebar = ({ activePage = '', onNavigateDashboard, onGenerateReport }) => 
         </div>
 
         <div className="space-y-4 pt-6 border-t border-zinc-800">
+          {/* Generate Report Button */}
           <button 
-            onClick={onGenerateReport}
-            className="w-full py-3 bg-white text-black font-semibold text-xs rounded-xl hover:bg-gray-200 transition-colors shadow-sm cursor-pointer"
+            onClick={handleGenerateReport}
+            disabled={isGenerating}
+            className="w-full py-3 bg-white text-black font-semibold text-xs rounded-xl hover:bg-gray-200 transition-colors shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Generate Report
+            {isGenerating ? 'Compiling PDF...' : 'Generate Report'}
           </button>
 
+          {/* Help Center & Logout */}
           <div className="space-y-1 text-xs">
             <button
               onClick={() => navigate('/help')}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-xs transition-colors w-full text-left cursor-pointer ${
-                activePage === 'help'
+                location.pathname === '/help' || activePage.toLowerCase() === 'help'
                   ? 'bg-[#1F1F1F] text-white'
                   : 'text-gray-400 hover:text-white hover:bg-zinc-900'
               }`}
@@ -170,7 +220,20 @@ const Sidebar = ({ activePage = '', onNavigateDashboard, onGenerateReport }) => 
         </div>
       </aside>
 
-      {/* White Background Logout Modal */}
+      {/* Generation Progress Modal (White Background) */}
+      {isGenerating && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full border border-gray-100 shadow-2xl flex flex-col items-center justify-center gap-3">
+            <div className="w-8 h-8 border-3 border-gray-200 border-t-black rounded-full animate-spin" />
+            <h4 className="text-sm font-bold text-gray-900">Generating Full Console Report</h4>
+            <p className="text-xs text-gray-600 text-center leading-relaxed">
+              {progressText || 'Capturing screen layouts across all admin pages...'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Logout Confirmation Modal (White Background) */}
       {showLogoutModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full border border-gray-100 shadow-2xl space-y-4">

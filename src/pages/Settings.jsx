@@ -2,18 +2,19 @@ import React, { useState } from 'react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import Sidebar from '../components/Sidebar';
+import DisplayPicture from '../assets/dp.JPG';
 
 const Settings = () => {
-  // Search State (Fixed missing state error)
+  // Search State
   const [searchQuery, setSearchQuery] = useState('');
 
   // Form State
   const [profile, setProfile] = useState({
-    fullName: 'Emaz Ali Khan',
+    fullName: 'Abdul Rafay',
     email: 'admin@gmail.com',
     role: 'Admin',
     bio: 'Advanced mathematics student focusing on quantum mechanics. Seeking professional tutors for specialized advanced calculus and theoretical physics applications.',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80'
+    avatar: DisplayPicture
   });
 
   // Modal & Notification States
@@ -58,11 +59,21 @@ const Settings = () => {
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
     if (!passwordData.currentPassword || !passwordData.newPassword) {
-      alert('Please fill out all password fields.');
+      setAlertModal({
+        isOpen: true,
+        title: 'Validation Error',
+        message: 'Please fill out all password fields.',
+        type: 'danger'
+      });
       return;
     }
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      alert('New passwords do not match!');
+      setAlertModal({
+        isOpen: true,
+        title: 'Password Mismatch',
+        message: 'New passwords do not match!',
+        type: 'danger'
+      });
       return;
     }
 
@@ -132,10 +143,11 @@ const Settings = () => {
           </div>
 
           <div className="flex items-center justify-end gap-4">
-
             <button className="p-2 text-gray-500 hover:text-black rounded-full hover:bg-gray-100 transition-colors cursor-pointer relative">
               <span className="w-2 h-2 bg-red-500 rounded-full absolute top-1.5 right-1.5 border border-white"></span>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+              </svg>
             </button>
             
             <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden border border-gray-200">
@@ -275,7 +287,7 @@ const Settings = () => {
         </div>
       </main>
 
-      {/* ---------------- UPDATE PASSWORD MODAL ---------------- */}
+      {/* ---------------- UPDATE PASSWORD MODAL (WHITE BACKGROUND) ---------------- */}
       {isPasswordModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
@@ -336,12 +348,14 @@ const Settings = () => {
         </div>
       )}
 
-      {/* ---------------- DEACTIVATE CONFIRMATION MODAL ---------------- */}
+      {/* ---------------- DEACTIVATE CONFIRMATION MODAL (WHITE BACKGROUND) ---------------- */}
       {isDeactivateModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-gray-100 text-center animate-in fade-in zoom-in-95 duration-150">
             <div className="w-10 h-10 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-3">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+              </svg>
             </div>
             <h3 className="font-bold text-sm text-gray-900 mb-1">Deactivate Account?</h3>
             <p className="text-xs text-gray-500 mb-5 leading-relaxed">This action cannot be undone. You will lose admin access to the TUTR dashboard.</p>
@@ -363,12 +377,14 @@ const Settings = () => {
         </div>
       )}
 
-      {/* ---------------- WHITE BACKGROUND POPUP ALERT MODAL ---------------- */}
+      {/* ---------------- POPUP ALERT MODAL (WHITE BACKGROUND) ---------------- */}
       {alertModal.isOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-gray-100 text-center animate-in fade-in zoom-in-95 duration-150">
             <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
             </div>
             <h3 className="font-bold text-sm text-gray-900 mb-1">{alertModal.title}</h3>
             <p className="text-xs text-gray-500 mb-5 leading-relaxed">{alertModal.message}</p>

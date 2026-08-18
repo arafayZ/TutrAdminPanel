@@ -1,7 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, X } from 'lucide-react';
 import tutrLogo from '../assets/app_icon1.png';
+
+// Hardcoded Temporary Credentials
+const TEMP_CREDENTIALS = {
+  email: 'admin@tutr.edu',
+  password: 'admin123'
+};
 
 const AdminLogin = () => {
   const navigate = useNavigate();
@@ -9,16 +15,26 @@ const AdminLogin = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  
+  // Modal & Error States
+  const [errorMessage, setErrorMessage] = useState('');
+  const [showErrorModal, setShowErrorModal] = useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    console.log({ email, password, rememberMe });
-    // Navigate straight to the dashboard page on submission
-    navigate('/dashboard');
+
+    // Verify against hardcoded credentials
+    if (email === TEMP_CREDENTIALS.email && password === TEMP_CREDENTIALS.password) {
+      console.log('Login successful:', { email, rememberMe });
+      navigate('/dashboard');
+    } else {
+      setErrorMessage('Invalid email or password. Please check your credentials and try again.');
+      setShowErrorModal(true);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] flex flex-col items-center justify-center p-4 font-sans text-[#1A1A1A]">
+    <div className="min-h-screen bg-[#F8F9FA] flex flex-col items-center justify-center p-4 font-sans text-[#1A1A1A] relative">
       
       {/* Top Header: Logo & Branding */}
       <div className="flex flex-col items-center mb-8">
@@ -38,6 +54,7 @@ const AdminLogin = () => {
 
       {/* Main Login Box */}
       <div className="w-full max-w-[420px] bg-white rounded-3xl p-8 shadow-2xl shadow-gray-200/60 border border-gray-100">
+
         <form onSubmit={handleSubmit} className="space-y-5">
           
           {/* Email Field */}
@@ -74,7 +91,7 @@ const AdminLogin = () => {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none cursor-pointer"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -119,6 +136,35 @@ const AdminLogin = () => {
           <a href="#status" className="hover:underline">System Status</a>
         </div>
       </div>
+
+      {/* ---------------- ERROR POPUP MODAL (WHITE BACKGROUND) ---------------- */}
+      {showErrorModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-gray-100 text-center animate-in fade-in zoom-in-95 duration-150 relative">
+            
+            <button 
+              onClick={() => setShowErrorModal(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-black transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="w-10 h-10 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-3">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+
+            <h3 className="font-bold text-sm text-gray-900 mb-1">Authentication Failed</h3>
+            <p className="text-xs text-gray-500 mb-5 leading-relaxed">{errorMessage}</p>
+
+            <button 
+              onClick={() => setShowErrorModal(false)}
+              className="w-full py-2.5 bg-black text-white font-semibold text-xs rounded-xl hover:bg-zinc-800 transition-colors cursor-pointer"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   );

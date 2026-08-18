@@ -8,6 +8,11 @@ import StudentManagement from './pages/StudentManagement';
 import VerificationRequests from './pages/VerificationRequests';
 import Settings from './pages/Settings';
 import CourseManagement from './pages/Courses';
+import ReviewsPage from './pages/ReviewsPage';
+import BlockedPage from './pages/BlockedPage';
+import ReportsPage from './pages/ReportsPage';
+import TeamAccessControlPage from './pages/TeamAccessControlPage';
+import NotificationsPage from './pages/NotificationsPage';
 
 function App() {
   return (
@@ -21,6 +26,7 @@ function App() {
         
         {/* Main Console Routes */}
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/tutors" element={<TutorManagement />} />
         <Route path="/tutormanagement" element={<Navigate to="/tutors" replace />} />
         
@@ -28,8 +34,10 @@ function App() {
         <Route path="/students" element={<StudentManagement />} />
         <Route path="/verifications" element={<VerificationRequests />} />
         <Route path="/courses" element={<CourseManagement />} />
-        <Route path="/reports" element={<Dashboard />} />
-        <Route path="/blocked" element={<Dashboard />} />
+        <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/reviews" element={<ReviewsPage />} />
+        <Route path="/blocked" element={<BlockedPage />} />
+        <Route path="/team" element={<TeamAccessControlPage />} />
         <Route path="/settings" element={<Settings />} />
         
         {/* Support */}
