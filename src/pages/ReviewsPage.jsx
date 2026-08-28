@@ -67,6 +67,7 @@ const ReviewsPage = () => {
 
   // Filter States
   const [tutorFilter, setTutorFilter] = useState('All Tutors');
+  const [modeFilter, setModeFilter] = useState('All Modes');
   const [ratingFilter, setRatingFilter] = useState('All Ratings');
 
   // Modal States (White Popups)
@@ -81,6 +82,7 @@ const ReviewsPage = () => {
       avatar:
         'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80',
       course: 'Mathematics',
+      mode: 'Online',
       tutor: 'Dr. Hamza Ahmed',
       date: 'Aug 05, 2026',
       rating: 5,
@@ -96,6 +98,7 @@ const ReviewsPage = () => {
       avatar:
         'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80',
       course: 'Physics',
+      mode: "Student's Home",
       tutor: 'Usman Raza',
       date: 'Aug 03, 2026',
       rating: 4,
@@ -111,6 +114,7 @@ const ReviewsPage = () => {
       avatar:
         'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
       course: 'Computer Science',
+      mode: 'Online',
       tutor: 'Abdul Rehman',
       date: 'Jul 30, 2026',
       rating: 5,
@@ -126,6 +130,7 @@ const ReviewsPage = () => {
       avatar:
         'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80',
       course: 'English',
+      mode: "Tutor's Home",
       tutor: 'Sana Malik',
       date: 'Jul 27, 2026',
       rating: 5,
@@ -141,6 +146,7 @@ const ReviewsPage = () => {
       avatar:
         'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&auto=format&fit=crop&q=80',
       course: 'Chemistry',
+      mode: "Student's Home",
       tutor: 'Dr. Ahmed Farooq',
       date: 'Jul 24, 2026',
       rating: 3,
@@ -156,6 +162,7 @@ const ReviewsPage = () => {
       avatar:
         'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&auto=format&fit=crop&q=80',
       course: 'Web Development',
+      mode: 'Online',
       tutor: 'Bilal Hassan',
       date: 'Jul 21, 2026',
       rating: 5,
@@ -171,6 +178,7 @@ const ReviewsPage = () => {
       avatar:
         'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=100&auto=format&fit=crop&q=80',
       course: 'Biology',
+      mode: "Tutor's Home",
       tutor: 'Dr. Ayesha Siddiqui',
       date: 'Jul 18, 2026',
       rating: 4,
@@ -186,6 +194,7 @@ const ReviewsPage = () => {
       avatar:
         'https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?w=100&auto=format&fit=crop&q=80',
       course: 'Accounting',
+      mode: 'Online',
       tutor: 'Usama Khalid',
       date: 'Jul 15, 2026',
       rating: 2,
@@ -201,6 +210,7 @@ const ReviewsPage = () => {
       avatar:
         'https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=100&auto=format&fit=crop&q=80',
       course: 'Statistics',
+      mode: 'Online',
       tutor: 'Dr. Zainab Ali',
       date: 'Jul 12, 2026',
       rating: 5,
@@ -216,6 +226,7 @@ const ReviewsPage = () => {
       avatar:
         'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80',
       course: 'Programming Fundamentals',
+      mode: "Student's Home",
       tutor: 'Owais Ahmed',
       date: 'Jul 09, 2026',
       rating: 4,
@@ -231,6 +242,7 @@ const ReviewsPage = () => {
       avatar:
         'https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?w=100&auto=format&fit=crop&q=80',
       course: 'Urdu',
+      mode: "Tutor's Home",
       tutor: 'Usama Qureshi',
       date: 'Jul 13, 2026',
       rating: 2,
@@ -261,13 +273,16 @@ const ReviewsPage = () => {
     const matchesTutor =
       tutorFilter === 'All Tutors' || rev.tutor === tutorFilter;
 
+    const matchesMode =
+      modeFilter === 'All Modes' || rev.mode === modeFilter;
+
     const matchesRating =
       ratingFilter === 'All Ratings' ||
       (ratingFilter === '5 Stars' && rev.rating === 5) ||
       (ratingFilter === '4 Stars' && rev.rating === 4) ||
       (ratingFilter === '1 Star' && rev.rating === 1);
 
-    return matchesSearch && matchesTutor && matchesRating;
+    return matchesSearch && matchesTutor && matchesMode && matchesRating;
   });
 
   const tutorOptions = [
@@ -285,6 +300,7 @@ const ReviewsPage = () => {
     'Usama Qureshi',
   ];
 
+  const modeOptions = ['All Modes', 'Online', "Student's Home", "Tutor's Home"];
   const ratingOptions = ['All Ratings', '5 Stars', '4 Stars', '1 Star'];
 
   const loadPDFScripts = () => {
@@ -329,12 +345,13 @@ const ReviewsPage = () => {
       doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 26);
       doc.text(`Total Entries: ${filteredReviews.length}`, 14, 31);
 
-      const headers = [['ID', 'Student Name', 'Course', 'Tutor', 'Rating', 'Date', 'Reported', 'Comment']];
+      const headers = [['ID', 'Student Name', 'Course', 'Mode', 'Tutor', 'Rating', 'Date', 'Reported', 'Comment']];
 
       const rows = filteredReviews.map((rev) => [
         rev.id,
         rev.studentName,
         rev.course,
+        rev.mode,
         rev.tutor,
         `${rev.rating} Stars`,
         rev.date,
@@ -351,13 +368,14 @@ const ReviewsPage = () => {
         styles: { fontSize: 8, cellPadding: 3 },
         columnStyles: {
           0: { cellWidth: 10 },
-          1: { cellWidth: 25 },
-          2: { cellWidth: 25 },
-          3: { cellWidth: 25 },
-          4: { cellWidth: 18 },
-          5: { cellWidth: 20 },
-          6: { cellWidth: 18 },
-          7: { cellWidth: 'auto' },
+          1: { cellWidth: 22 },
+          2: { cellWidth: 22 },
+          3: { cellWidth: 22 },
+          4: { cellWidth: 22 },
+          5: { cellWidth: 16 },
+          6: { cellWidth: 20 },
+          7: { cellWidth: 16 },
+          8: { cellWidth: 'auto' },
         },
       });
 
@@ -422,13 +440,20 @@ const ReviewsPage = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-4">
                 {/* Custom Filter Bar */}
-                <div className="bg-white p-3 rounded-2xl border border-gray-100 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-3">
+                <div className="bg-white p-3 rounded-2xl border border-gray-100 flex items-center justify-between text-xs flex-wrap gap-2">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <CustomDropdown
                       label="Select Tutor"
                       value={tutorFilter}
                       onChange={setTutorFilter}
                       options={tutorOptions}
+                    />
+
+                    <CustomDropdown
+                      label="Select Mode"
+                      value={modeFilter}
+                      onChange={setModeFilter}
+                      options={modeOptions}
                     />
 
                     <CustomDropdown
@@ -471,7 +496,7 @@ const ReviewsPage = () => {
                               )}
                             </div>
                             <p className="text-[11px] text-gray-500">
-                              Course: <span className="font-medium text-gray-800">{rev.course}</span> • Tutor: <span className="font-medium text-gray-800">{rev.tutor}</span>
+                              Course: <span className="font-medium text-gray-800">{rev.course}</span> • Mode: <span className="font-medium text-gray-800">{rev.mode}</span> • Tutor: <span className="font-medium text-gray-800">{rev.tutor}</span>
                             </p>
                           </div>
                         </div>
@@ -615,7 +640,7 @@ const ReviewsPage = () => {
         )}
       </main>
 
-      {/* Details Modal */}
+      {/* Details Modal (White Pop-up Container) */}
       {selectedReview && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full border border-gray-100 shadow-2xl space-y-4">
@@ -646,6 +671,9 @@ const ReviewsPage = () => {
                 <strong className="text-gray-900">Course:</strong> {selectedReview.course}
               </p>
               <p>
+                <strong className="text-gray-900">Mode:</strong> {selectedReview.mode}
+              </p>
+              <p>
                 <strong className="text-gray-900">Tutor:</strong> {selectedReview.tutor}
               </p>
               <div className="pt-2">
@@ -668,7 +696,7 @@ const ReviewsPage = () => {
         </div>
       )}
 
-      {/* Action Resolution Modal */}
+      {/* Action Resolution Modal (White Pop-up Container) */}
       {actionReview && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full border border-gray-100 shadow-2xl space-y-4">

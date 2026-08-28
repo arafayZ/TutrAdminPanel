@@ -128,6 +128,16 @@ const Sidebar = ({ activePage = '', onNavigateDashboard }) => {
       ),
     },
     {
+      id: 'chat',
+      label: 'MESSAGES',
+      path: '/chat',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h8M8 14h5m-1 7a9 9 0 10-8.485-6.1L3 21l6.1-.515A8.96 8.96 0 0012 21z"/>
+        </svg>
+      ),
+    },
+    {
       id: 'team',
       label: 'TEAM & ACCESS CONTROL',
       path: '/team',

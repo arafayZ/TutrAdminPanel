@@ -296,21 +296,38 @@ const Dashboard = () => {
                 <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-5">
                   <h3 className="font-bold text-sm text-gray-900">Teaching Mode</h3>
                   
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {[
-                      { label: 'MATHEMATICS', val: '42%' },
-                      { label: 'LANGUAGES', val: '28%' },
-                      { label: 'HUMANITIES', val: '15%' },
-                      { label: 'SCIENCES', val: '15%' },
+                      { 
+                        label: 'Online', 
+                        icon: (
+                          <svg className="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                        ) 
+                      },
+                      { 
+                        label: "Tutor's Home", 
+                        icon: (
+                          <svg className="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                          </svg>
+                        ) 
+                      },
+                      { 
+                        label: "Student's Home", 
+                        icon: (
+                          <svg className="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0h4m-4 0v-4a1 1 0 011-1h2a1 1 0 011 1v4" />
+                          </svg>
+                        ) 
+                      },
                     ].map((item, idx) => (
-                      <div key={idx}>
-                        <div className="flex justify-between text-[10px] font-bold text-gray-700 uppercase mb-1.5">
-                          <span>{item.label}</span>
-                          <span>{item.val}</span>
+                      <div key={idx} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                        <div className="p-2 bg-white rounded-lg border border-gray-200 shrink-0">
+                          {item.icon}
                         </div>
-                        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="bg-black h-full" style={{ width: item.val }}></div>
-                        </div>
+                        <span className="text-xs font-semibold text-gray-800">{item.label}</span>
                       </div>
                     ))}
                   </div>

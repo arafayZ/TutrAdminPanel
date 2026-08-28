@@ -8,7 +8,7 @@ import NotificationsPage from '../pages/NotificationsPage';
 const Navbar = ({ 
   searchQuery, 
   setSearchQuery, 
-  user = { name: "Abdul Rafay", role: "ADMIN" },
+  user = { name: "Abdul Rafay", role: "SUPER ADMIN" },
   placeholder = "Search..." 
 }) => {
   const navigate = useNavigate();

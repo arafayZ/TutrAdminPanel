@@ -13,6 +13,7 @@ import BlockedPage from './pages/BlockedPage';
 import ReportsPage from './pages/ReportsPage';
 import TeamAccessControlPage from './pages/TeamAccessControlPage';
 import NotificationsPage from './pages/NotificationsPage';
+import Chat from './pages/Chat';
 
 function App() {
   return (
@@ -37,6 +38,7 @@ function App() {
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/reviews" element={<ReviewsPage />} />
         <Route path="/blocked" element={<BlockedPage />} />
+        <Route path="/chat" element={<Chat />} />
         <Route path="/team" element={<TeamAccessControlPage />} />
         <Route path="/settings" element={<Settings />} />
         

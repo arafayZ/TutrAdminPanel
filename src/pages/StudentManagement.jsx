@@ -84,14 +84,17 @@ const StudentManagement = () => {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [studentToBlock, setStudentToBlock] = useState(null);
 
-  // Initial Student Data
+  // Initial Student Data with Course Pricing Breakdown
   const [students, setStudents] = useState([
     {
       id: "STU-101",
       name: "Sumaika Asif",
       title: "BS Computer Science Student",
       avatar: "https://randomuser.me/api/portraits/women/12.jpg",
-      subjects: ["COMPUTER SCIENCE", "PROGRAMMING"],
+      enrolledCourses: [
+        { name: "Computer Science", basePrice: "RS. 15,000", agreedPrice: "RS. 12,000" },
+        { name: "Programming", basePrice: "RS. 18,000", agreedPrice: "RS. 14,500" },
+      ],
       rating: 4.8,
       coursesEnrolled: 4,
       engagement: 92,
@@ -100,17 +103,16 @@ const StudentManagement = () => {
       completedCourses: 2,
       activeTutors: 2,
       reports: "0",
-      recentActivity: [
-        { title: "Programming Session", detail: "Completed • JavaScript • Aug 07, 2026" },
-        { title: "New Course Enrolled", detail: "Enrolled in Data Structures • Aug 05, 2026" }
-      ],
     },
     {
       id: "STU-102",
       name: "Hamza Ahmed",
       title: "Intermediate Student",
       avatar: "https://randomuser.me/api/portraits/men/14.jpg",
-      subjects: ["MATHEMATICS", "CALCULUS"],
+      enrolledCourses: [
+        { name: "Mathematics", basePrice: "RS. 12,000", agreedPrice: "RS. 10,000" },
+        { name: "Calculus", basePrice: "RS. 14,000", agreedPrice: "RS. 11,500" },
+      ],
       rating: 4.6,
       coursesEnrolled: 3,
       engagement: 87,
@@ -119,16 +121,16 @@ const StudentManagement = () => {
       completedCourses: 1,
       activeTutors: 1,
       reports: "1",
-      recentActivity: [
-        { title: "Calculus Class", detail: "Completed • 2 Hours • Aug 06, 2026" }
-      ],
     },
     {
       id: "STU-103",
       name: "Areeba Khan",
       title: "F.Sc. Pre-Engineering Student",
       avatar: "https://randomuser.me/api/portraits/women/25.jpg",
-      subjects: ["PHYSICS", "MATHEMATICS"],
+      enrolledCourses: [
+        { name: "Physics", basePrice: "RS. 16,000", agreedPrice: "RS. 13,000" },
+        { name: "Mathematics", basePrice: "RS. 15,000", agreedPrice: "RS. 12,500" },
+      ],
       rating: 4.9,
       coursesEnrolled: 5,
       engagement: 95,
@@ -137,16 +139,16 @@ const StudentManagement = () => {
       completedCourses: 3,
       activeTutors: 2,
       reports: "0",
-      recentActivity: [
-        { title: "Physics Lecture", detail: "Completed • Mechanics • Aug 07, 2026" }
-      ],
     },
     {
       id: "STU-104",
       name: "Muhammad Abdullah",
       title: "IELTS Candidate",
       avatar: "https://randomuser.me/api/portraits/men/22.jpg",
-      subjects: ["ENGLISH", "IELTS"],
+      enrolledCourses: [
+        { name: "English", basePrice: "RS. 10,000", agreedPrice: "RS. 8,500" },
+        { name: "IELTS", basePrice: "RS. 25,000", agreedPrice: "RS. 20,000" },
+      ],
       rating: 4.7,
       coursesEnrolled: 2,
       engagement: 84,
@@ -155,16 +157,16 @@ const StudentManagement = () => {
       completedCourses: 0,
       activeTutors: 1,
       reports: "0",
-      recentActivity: [
-        { title: "IELTS Speaking Practice", detail: "Completed • 1 Hour • Aug 06, 2026" }
-      ],
     },
     {
       id: "STU-105",
       name: "Mahnoor Fatima",
       title: "Web Development Student",
       avatar: "https://randomuser.me/api/portraits/women/32.jpg",
-      subjects: ["WEB DEVELOPMENT", "JAVASCRIPT"],
+      enrolledCourses: [
+        { name: "Web Development", basePrice: "RS. 20,000", agreedPrice: "RS. 17,000" },
+        { name: "JavaScript", basePrice: "RS. 15,000", agreedPrice: "RS. 12,000" },
+      ],
       rating: 4.8,
       coursesEnrolled: 3,
       engagement: 90,
@@ -173,16 +175,16 @@ const StudentManagement = () => {
       completedCourses: 1,
       activeTutors: 2,
       reports: "0",
-      recentActivity: [
-        { title: "JavaScript Class", detail: "Completed • React Basics • Aug 07, 2026" }
-      ],
     },
     {
       id: "STU-106",
       name: "Ali Raza",
       title: "M.Sc. Chemistry Student",
       avatar: "https://randomuser.me/api/portraits/men/36.jpg",
-      subjects: ["CHEMISTRY", "ORGANIC CHEMISTRY"],
+      enrolledCourses: [
+        { name: "Chemistry", basePrice: "RS. 14,000", agreedPrice: "RS. 11,000" },
+        { name: "Organic Chemistry", basePrice: "RS. 16,000", agreedPrice: "RS. 13,500" },
+      ],
       rating: 4.5,
       coursesEnrolled: 4,
       engagement: 78,
@@ -191,16 +193,16 @@ const StudentManagement = () => {
       completedCourses: 2,
       activeTutors: 1,
       reports: "2",
-      recentActivity: [
-        { title: "Organic Chemistry Class", detail: "Completed • Hydrocarbons • Jun 15, 2026" }
-      ],
     },
     {
       id: "STU-107",
       name: "Hira Shah",
       title: "Economics Student",
       avatar: "https://randomuser.me/api/portraits/women/41.jpg",
-      subjects: ["ECONOMICS", "ACCOUNTING"],
+      enrolledCourses: [
+        { name: "Economics", basePrice: "RS. 13,000", agreedPrice: "RS. 10,500" },
+        { name: "Accounting", basePrice: "RS. 15,000", agreedPrice: "RS. 12,000" },
+      ],
       rating: 4.6,
       coursesEnrolled: 3,
       engagement: 81,
@@ -209,16 +211,16 @@ const StudentManagement = () => {
       completedCourses: 1,
       activeTutors: 0,
       reports: "1",
-      recentActivity: [
-        { title: "Last Course Activity", detail: "Accounting Class • May 10, 2026" }
-      ],
     },
     {
       id: "STU-108",
       name: "Usama Tariq",
       title: "Biology Student",
       avatar: "https://randomuser.me/api/portraits/men/42.jpg",
-      subjects: ["BIOLOGY", "GENERAL SCIENCE"],
+      enrolledCourses: [
+        { name: "Biology", basePrice: "RS. 12,000", agreedPrice: "RS. 9,500" },
+        { name: "General Science", basePrice: "RS. 10,000", agreedPrice: "RS. 8,000" },
+      ],
       rating: 4.8,
       coursesEnrolled: 4,
       engagement: 93,
@@ -227,16 +229,16 @@ const StudentManagement = () => {
       completedCourses: 2,
       activeTutors: 2,
       reports: "0",
-      recentActivity: [
-        { title: "Biology Class", detail: "Completed • Cell Biology • Aug 07, 2026" }
-      ],
     },
     {
       id: "STU-109",
       name: "Laiba Noor",
       title: "Engineering Student",
       avatar: "https://randomuser.me/api/portraits/women/52.jpg",
-      subjects: ["ENGINEERING", "MATHEMATICS"],
+      enrolledCourses: [
+        { name: "Engineering", basePrice: "RS. 22,000", agreedPrice: "RS. 18,500" },
+        { name: "Mathematics", basePrice: "RS. 15,000", agreedPrice: "RS. 12,000" },
+      ],
       rating: 4.7,
       coursesEnrolled: 5,
       engagement: 88,
@@ -245,16 +247,16 @@ const StudentManagement = () => {
       completedCourses: 2,
       activeTutors: 2,
       reports: "0",
-      recentActivity: [
-        { title: "Engineering Mathematics", detail: "Completed • Aug 06, 2026" }
-      ],
     },
     {
       id: "STU-110",
       name: "Ahmed Hassan",
       title: "Psychology Student",
       avatar: "https://randomuser.me/api/portraits/men/56.jpg",
-      subjects: ["PSYCHOLOGY", "SOCIAL SCIENCE"],
+      enrolledCourses: [
+        { name: "Psychology", basePrice: "RS. 14,000", agreedPrice: "RS. 11,000" },
+        { name: "Social Science", basePrice: "RS. 11,000", agreedPrice: "RS. 9,000" },
+      ],
       rating: 4.6,
       coursesEnrolled: 2,
       engagement: 80,
@@ -263,9 +265,6 @@ const StudentManagement = () => {
       completedCourses: 0,
       activeTutors: 1,
       reports: "0",
-      recentActivity: [
-        { title: "Student Registration", detail: "Account created • Apr 20, 2026" }
-      ],
     },
   ]);
 
@@ -288,15 +287,15 @@ const StudentManagement = () => {
     const matchesCategory =
       categoryFilter === 'All Subjects'
         ? true
-        : student.subjects.some(
-            (sub) => sub.toLowerCase() === categoryFilter.toLowerCase()
+        : student.enrolledCourses.some(
+            (c) => c.name.toLowerCase() === categoryFilter.toLowerCase()
           );
 
     const matchesSearch =
       student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       student.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.subjects.some((s) =>
-        s.toLowerCase().includes(searchQuery.toLowerCase())
+      student.enrolledCourses.some((c) =>
+        c.name.toLowerCase().includes(searchQuery.toLowerCase())
       );
 
     return matchesStatus && matchesCategory && matchesSearch;
@@ -320,7 +319,7 @@ const StudentManagement = () => {
       s.id,
       s.name,
       computeStatus(s.lastActiveDate),
-      `${s.coursesEnrolled} Courses (${s.subjects.join(', ')})`,
+      `${s.coursesEnrolled} Courses (${s.enrolledCourses.map((c) => c.name).join(', ')})`,
     ]);
 
     autoTable(doc, {
@@ -481,12 +480,12 @@ const StudentManagement = () => {
                               <span className="font-bold text-gray-900 mr-1">
                                 {student.coursesEnrolled} Courses:
                               </span>
-                              {student.subjects.map((sub, idx) => (
+                              {student.enrolledCourses.map((c, idx) => (
                                 <span
                                   key={idx}
                                   className="bg-gray-100 text-gray-500 font-bold px-2 py-0.5 rounded text-[9px] tracking-wide"
                                 >
-                                  {sub}
+                                  {c.name}
                                 </span>
                               ))}
                             </div>
@@ -586,19 +585,32 @@ const StudentManagement = () => {
               </div>
             </div>
 
+            {/* Enrolled Courses Section with Pricing Breakdown */}
             <div className="space-y-3">
-              <h5 className="text-xs font-bold text-gray-900">
-                Recent Activity
+              <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                ENROLLED COURSES 
               </h5>
-              <div className="space-y-3 text-xs">
-                {selectedStudent.recentActivity?.map((act, index) => (
-                  <div key={index} className="flex gap-2.5">
-                    <span className="text-black font-bold text-base leading-none">
-                      •
-                    </span>
-                    <div>
-                      <p className="font-bold text-gray-900">{act.title}</p>
-                      <p className="text-[10px] text-gray-400">{act.detail}</p>
+              <div className="space-y-2">
+                {selectedStudent.enrolledCourses.map((course, index) => (
+                  <div 
+                    key={index} 
+                    className="flex items-center justify-between p-3 bg-gray-50/80 border border-gray-100 rounded-xl"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-2 h-2 rounded-full bg-black" />
+                      <span className="text-xs font-bold text-gray-900">
+                        {course.name}
+                      </span>
+                    </div>
+
+                    {/* Dual Price Display replacing the Enrolled Badge */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-medium text-gray-400 line-through">
+                        {course.basePrice}
+                      </span>
+                      <span className="text-xs font-bold text-gray-900">
+                        {course.agreedPrice}
+                      </span>
                     </div>
                   </div>
                 ))}

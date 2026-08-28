@@ -5,12 +5,21 @@ import Sidebar from '../components/Sidebar';
 import Navbar from '../components/Navbar';
 import NotificationsPage from './NotificationsPage';
 
-// Custom Dropdown Component (Uses ref click-outside, no screen overlay element)
+// Helper function to format uppercase string to Capital Case
+const formatCourseName = (str) => {
+  if (!str) return '';
+  return str
+    .toLowerCase()
+    .split(' ')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
+
+// Custom Dropdown Component
 const CustomDropdown = ({ label, value, onChange, options }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  // Close dropdown when clicking outside of it
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -85,18 +94,12 @@ const TutorManagement = () => {
       subjects: ["COMPUTER SCIENCE", "PROGRAMMING"],
       rating: 4.8,
       reviewsCount: 126,
-      engagement: 91,
       status: "Active",
       credentialVerified: true,
       totalCourses: 12,
       avgRating: 4.82,
       activeStudents: 28,
       reports: "3",
-      recentActivity: [
-        { title: "Programming Session", detail: "Completed • 18 Students • Aug 06, 2026" },
-        { title: "Course Material Updated", detail: "Updated 'Data Structures' material • Aug 04, 2026" },
-        { title: "Profile Verification", detail: "Academic credentials verified • Aug 01, 2026" },
-      ],
     },
     {
       id: "TTR-102",
@@ -106,18 +109,12 @@ const TutorManagement = () => {
       subjects: ["MATHEMATICS", "CALCULUS"],
       rating: 4.9,
       reviewsCount: 214,
-      engagement: 95,
       status: "Active",
       credentialVerified: true,
       totalCourses: 9,
       avgRating: 4.91,
       activeStudents: 32,
       reports: "1",
-      recentActivity: [
-        { title: "Calculus Class", detail: "Completed • 22 Students • Aug 07, 2026" },
-        { title: "New Student Enrollment", detail: "Accepted 3 new students • Aug 05, 2026" },
-        { title: "Profile Verification", detail: "Academic credentials verified • Jul 30, 2026" },
-      ],
     },
     {
       id: "TTR-103",
@@ -127,17 +124,12 @@ const TutorManagement = () => {
       subjects: ["PHYSICS", "QUANTUM PHYSICS"],
       rating: 4.7,
       reviewsCount: 98,
-      engagement: 84,
       status: "Active",
       credentialVerified: true,
       totalCourses: 7,
       avgRating: 4.76,
       activeStudents: 19,
       reports: "2",
-      recentActivity: [
-        { title: "Physics Lecture", detail: "Completed • 15 Students • Aug 05, 2026" },
-        { title: "Course Material Updated", detail: "Added new numerical problems • Aug 03, 2026" },
-      ],
     },
     {
       id: "TTR-104",
@@ -147,17 +139,12 @@ const TutorManagement = () => {
       subjects: ["ENGLISH", "IELTS"],
       rating: 4.8,
       reviewsCount: 176,
-      engagement: 89,
       status: "Active",
       credentialVerified: true,
       totalCourses: 11,
       avgRating: 4.84,
       activeStudents: 25,
       reports: "0",
-      recentActivity: [
-        { title: "IELTS Preparation Class", detail: "Completed • 12 Students • Aug 07, 2026" },
-        { title: "Student Feedback", detail: "Received 5-star rating from 4 students • Aug 06, 2026" },
-      ],
     },
     {
       id: "TTR-105",
@@ -167,37 +154,27 @@ const TutorManagement = () => {
       subjects: ["WEB DEVELOPMENT", "JAVASCRIPT"],
       rating: 4.6,
       reviewsCount: 73,
-      engagement: 79,
       status: "Pending",
       credentialVerified: false,
       totalCourses: 5,
       avgRating: 4.65,
       activeStudents: 14,
       reports: "1",
-      recentActivity: [
-        { title: "Tutor Application", detail: "Application submitted • Aug 07, 2026" },
-        { title: "Documents Uploaded", detail: "Academic documents submitted for verification • Aug 07, 2026" },
-      ],
     },
     {
       id: "TTR-106",
       name: "Fatima Zahra",
       title: "M.Sc. Chemistry",
       avatar: "https://randomuser.me/api/portraits/women/33.jpg",
-      subjects: ["CHEMISTRY", "ORGANIC CHEMISTRY"],
+      subjects: ["CHEMISTRY", "ORGANIC CHEMISTRY", "INORGANIC CHEMISTRY", "PHYSICS", "URDU"],
       rating: 4.9,
       reviewsCount: 189,
-      engagement: 93,
       status: "Active",
       credentialVerified: true,
       totalCourses: 10,
       avgRating: 4.89,
       activeStudents: 27,
       reports: "1",
-      recentActivity: [
-        { title: "Organic Chemistry Class", detail: "Completed • 20 Students • Aug 06, 2026" },
-        { title: "New Student Enrollment", detail: "Accepted 2 new students • Aug 04, 2026" },
-      ],
     },
     {
       id: "TTR-107",
@@ -207,17 +184,12 @@ const TutorManagement = () => {
       subjects: ["ECONOMICS", "ACCOUNTING"],
       rating: 4.5,
       reviewsCount: 64,
-      engagement: 76,
-      status: "Inactive",
+      status: "Blocked",
       credentialVerified: true,
       totalCourses: 6,
       avgRating: 4.57,
       activeStudents: 0,
       reports: "4",
-      recentActivity: [
-        { title: "Account Status Changed", detail: "Tutor account marked inactive • Jul 28, 2026" },
-        { title: "Last Session", detail: "Completed • 8 Students • Jul 25, 2026" },
-      ],
     },
     {
       id: "TTR-108",
@@ -227,17 +199,12 @@ const TutorManagement = () => {
       subjects: ["BIOLOGY", "GENERAL SCIENCE"],
       rating: 4.7,
       reviewsCount: 112,
-      engagement: 86,
       status: "Active",
       credentialVerified: true,
       totalCourses: 8,
       avgRating: 4.74,
       activeStudents: 21,
       reports: "0",
-      recentActivity: [
-        { title: "Biology Class", detail: "Completed • 16 Students • Aug 05, 2026" },
-        { title: "Course Updated", detail: "Updated Biology Chapter 5 material • Aug 02, 2026" },
-      ],
     },
     {
       id: "TTR-109",
@@ -247,17 +214,12 @@ const TutorManagement = () => {
       subjects: ["MATHEMATICS", "ENGINEERING"],
       rating: 4.6,
       reviewsCount: 87,
-      engagement: 82,
       status: "Pending",
       credentialVerified: false,
       totalCourses: 4,
       avgRating: 4.62,
       activeStudents: 9,
       reports: "0",
-      recentActivity: [
-        { title: "Tutor Application", detail: "Application submitted • Aug 06, 2026" },
-        { title: "Credential Review", detail: "Documents awaiting admin verification • Aug 06, 2026" },
-      ],
     },
     {
       id: "TTR-110",
@@ -267,25 +229,34 @@ const TutorManagement = () => {
       subjects: ["PSYCHOLOGY", "SOCIAL SCIENCE"],
       rating: 4.8,
       reviewsCount: 143,
-      engagement: 90,
       status: "Active",
       credentialVerified: true,
       totalCourses: 9,
       avgRating: 4.81,
       activeStudents: 23,
       reports: "2",
-      recentActivity: [
-        { title: "Psychology Lecture", detail: "Completed • 14 Students • Aug 07, 2026" },
-        { title: "Student Feedback", detail: "Received 5-star rating • Aug 05, 2026" },
-      ],
     },
   ]);
 
-  // Handle Actions
+  // Handle Actions - Automatically verifies credentials when activated
   const handleToggleStatus = (tutorId, newStatus) => {
-    setTutors(prev => prev.map(t => t.id === tutorId ? { ...t, status: newStatus } : t));
+    setTutors(prev => prev.map(t => {
+      if (t.id === tutorId) {
+        return { 
+          ...t, 
+          status: newStatus,
+          credentialVerified: newStatus === 'Active' ? true : t.credentialVerified 
+        };
+      }
+      return t;
+    }));
+
     if (selectedTutor?.id === tutorId) {
-      setSelectedTutor(prev => ({ ...prev, status: newStatus }));
+      setSelectedTutor(prev => ({ 
+        ...prev, 
+        status: newStatus,
+        credentialVerified: newStatus === 'Active' ? true : prev.credentialVerified
+      }));
     }
   };
 
@@ -296,9 +267,11 @@ const TutorManagement = () => {
     }
   };
 
-  // Filter Logic (Status + Category + Search Query)
+  // Filter Logic
   const filteredTutors = tutors.filter(tutor => {
-    const matchesStatus = statusFilter === 'All Tutors' ? true : tutor.status === statusFilter;
+    const matchesStatus = statusFilter === 'All Tutors' 
+      ? true 
+      : tutor.status.toLowerCase() === statusFilter.toLowerCase();
     
     const matchesCategory = categoryFilter === 'All Subjects' 
       ? true 
@@ -322,9 +295,9 @@ const TutorManagement = () => {
     doc.setFont('helvetica', 'normal');
     doc.text(`Status: ${statusFilter} | Category: ${categoryFilter} | Date: ${new Date().toLocaleDateString()} | Time: ${new Date().toLocaleTimeString()}`, 14, 22);
 
-    const tableHeaders = [["ID", "Name", "Title", "Rating", "Engagement", "Status"]];
+    const tableHeaders = [["ID", "Name", "Title", "Subjects", "Rating", "Status"]];
     const tableRows = filteredTutors.map(t => [
-      t.id, t.name, t.title, `${t.rating} (${t.reviewsCount})`, `${t.engagement}%`, t.status
+      t.id, t.name, t.title, t.subjects.map(formatCourseName).join(', '), `${t.rating} (${t.reviewsCount})`, t.status
     ]);
 
     autoTable(doc, {
@@ -338,14 +311,25 @@ const TutorManagement = () => {
     doc.save(`Tutor_Report_${statusFilter}_${categoryFilter}.pdf`);
   };
 
+  // Helper function to handle status badge styles dynamically
+  const getStatusBadgeStyle = (status) => {
+    switch (status) {
+      case 'Active':
+        return 'bg-green-100 text-green-700';
+      case 'Pending':
+        return 'bg-blue-100 text-blue-700';
+      case 'Blocked':
+        return 'bg-red-100 text-red-700';
+      default:
+        return 'bg-gray-100 text-gray-700';
+    }
+  };
+
   return (
     <div className="flex h-screen bg-[#F8F9FB] font-sans text-gray-900 overflow-hidden relative">
-      {/* Sidebar Component */}
       <Sidebar onGenerateReport={handleExportPDF} />
 
-      {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-y-auto">
-        {/* Imported Standalone Navbar Component */}
         <Navbar 
           viewState={viewState} 
           setViewState={setViewState} 
@@ -353,12 +337,10 @@ const TutorManagement = () => {
           setSearchQuery={setSearchQuery} 
         />
 
-        {/* Dashboard Content */}
         {viewState === 'notifications' ? (
           <NotificationsPage onBack={() => setViewState('dashboard')} />
         ) : (
           <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto w-full space-y-6">
-            {/* Title & Export */}
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Tutor Management</h2>
@@ -382,7 +364,7 @@ const TutorManagement = () => {
                   label="STATUS"
                   value={statusFilter}
                   onChange={setStatusFilter}
-                  options={['All Tutors', 'Active', 'Pending', 'Suspended']}
+                  options={['All Tutors', 'Active', 'Pending', 'Blocked']}
                 />
 
                 <CustomDropdown
@@ -410,9 +392,8 @@ const TutorManagement = () => {
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/50 text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">
                     <th className="py-4 px-6">TUTOR</th>
-                    <th className="py-4 px-6">SUBJECT SPECIALIZATION</th>
+                    <th className="py-4 px-6">SUBJECTS OFFERED</th>
                     <th className="py-4 px-6">RATING</th>
-                    <th className="py-4 px-6">ENGAGEMENT</th>
                     <th className="py-4 px-6">STATUS</th>
                   </tr>
                 </thead>
@@ -439,7 +420,7 @@ const TutorManagement = () => {
                           <div className="flex items-center gap-1.5 flex-wrap">
                             {tutor.subjects.map((sub, idx) => (
                               <span key={idx} className="bg-gray-100 text-gray-500 font-bold px-2 py-0.5 rounded text-[9px] tracking-wide">
-                                {sub}
+                                {formatCourseName(sub)}
                               </span>
                             ))}
                           </div>
@@ -452,20 +433,7 @@ const TutorManagement = () => {
                           </div>
                         </td>
                         <td className="py-4 px-6">
-                          <div className="w-32 space-y-1">
-                            <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
-                              <div 
-                                className="bg-black h-full rounded-full" 
-                                style={{ width: `${tutor.engagement}%` }}
-                              />
-                            </div>
-                            <span className="text-[9px] font-bold text-gray-400 block">{tutor.engagement}% CAPACITY</span>
-                          </div>
-                        </td>
-                        <td className="py-4 px-6">
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                            tutor.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
-                          }`}>
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${getStatusBadgeStyle(tutor.status)}`}>
                             {tutor.status}
                           </span>
                         </td>
@@ -473,7 +441,7 @@ const TutorManagement = () => {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="5" className="py-8 text-center text-gray-400 text-xs font-medium">
+                      <td colSpan="4" className="py-8 text-center text-gray-400 text-xs font-medium">
                         No tutors found matching the selected filters.
                       </td>
                     </tr>
@@ -485,11 +453,10 @@ const TutorManagement = () => {
         )}
       </main>
 
-      {/* Slide-over Right Drawer (Tutor Details) */}
+      {/* Slide-over Right Drawer */}
       {selectedTutor && (
         <aside className="w-96 bg-white border-l border-gray-200 h-screen overflow-y-auto flex flex-col justify-between p-6 shadow-xl z-20 sticky top-0">
           <div className="space-y-6">
-            {/* Header & Close Button */}
             <div className="flex items-center justify-between border-b border-gray-100 pb-4">
               <h3 className="text-sm font-bold text-gray-900">Tutor Details</h3>
               <button 
@@ -500,7 +467,6 @@ const TutorManagement = () => {
               </button>
             </div>
 
-            {/* Profile Avatar & Title */}
             <div className="text-center space-y-2">
               <img src={selectedTutor.avatar} alt={selectedTutor.name} className="w-20 h-20 rounded-2xl object-cover mx-auto" />
               <div>
@@ -516,7 +482,6 @@ const TutorManagement = () => {
               )}
             </div>
 
-            {/* Metric Cards Grid */}
             <div className="grid grid-cols-2 gap-3 text-left">
               <div className="bg-gray-50/80 p-3 rounded-xl border border-gray-100">
                 <span className="text-[9px] font-bold uppercase text-gray-400 block tracking-wider">TOTAL COURSES</span>
@@ -536,16 +501,22 @@ const TutorManagement = () => {
               </div>
             </div>
 
-            {/* Recent Activity Timeline */}
+            {/* Offered Courses Section */}
             <div className="space-y-3">
-              <h5 className="text-xs font-bold text-gray-900">Recent Activity</h5>
-              <div className="space-y-3 text-xs">
-                {selectedTutor.recentActivity?.map((act, index) => (
-                  <div key={index} className="flex gap-2.5">
-                    <span className="text-black font-bold text-base leading-none">•</span>
-                    <div>
-                      <p className="font-bold text-gray-900">{act.title}</p>
-                      <p className="text-[10px] text-gray-400">{act.detail}</p>
+              <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                Offered Courses 
+              </h5>
+              <div className="space-y-2">
+                {selectedTutor.subjects.map((subject, index) => (
+                  <div 
+                    key={index} 
+                    className="flex items-center justify-between p-3 bg-gray-50/80 border border-gray-100 rounded-xl"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-2 h-2 rounded-full bg-black" />
+                      <span className="text-xs font-bold text-gray-900">
+                        {formatCourseName(subject)}
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -553,17 +524,16 @@ const TutorManagement = () => {
             </div>
           </div>
 
-          {/* Action Buttons */}
           <div className="pt-6 border-t border-gray-100 space-y-2">
             <button className="w-full py-2.5 bg-black text-white text-xs font-bold rounded-xl hover:bg-zinc-800 transition-colors cursor-pointer">
               Send Direct Message
             </button>
             <div className="grid grid-cols-2 gap-2">
               <button 
-                onClick={() => handleToggleStatus(selectedTutor.id, selectedTutor.status === 'Active' ? 'Suspended' : 'Active')}
+                onClick={() => handleToggleStatus(selectedTutor.id, selectedTutor.status === 'Active' ? 'Blocked' : 'Active')}
                 className="py-2 border border-gray-300 text-gray-700 text-xs font-bold rounded-xl hover:bg-gray-100 transition-colors cursor-pointer"
               >
-                {selectedTutor.status === 'Active' ? 'SUSPEND' : 'ACTIVATE'}
+                {selectedTutor.status === 'Active' ? 'BLOCK' : 'ACTIVATE'}
               </button>
               <button 
                 onClick={() => handleRemoveTutor(selectedTutor.id)}

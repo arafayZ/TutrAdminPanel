@@ -63,19 +63,13 @@ const CustomDropdown = ({ label, value, onChange, options }) => {
 };
 
 const CourseManagement = () => {
-  // Navigation & View State
   const [viewState, setViewState] = useState('dashboard');
-
-  // Filter States
   const [statusFilter, setStatusFilter] = useState('All Statuses');
   const [categoryFilter, setCategoryFilter] = useState('All Categories');
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Selected Course Drawer State & Modal Confirmation State
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [courseToDelete, setCourseToDelete] = useState(null);
 
-  // Initial Course Data
   const [courses, setCourses] = useState([
     {
       id: "CRS-201",
@@ -89,9 +83,15 @@ const CourseManagement = () => {
       duration: "12 Weeks",
       totalModules: 10,
       completionRate: "88%",
-      recentUpdates: [
-        { title: "Module 8 Released", detail: "Added Quantum Mechanics Notes • Aug 05, 2026" }
-      ],
+      description: "Comprehensive study covering core principles of modern mechanics, energy dynamics, fluid dynamics, and quantum physics fundamentals tailored for academic excellence.",
+      features: [
+        { label: "24 Classes per month", iconType: "book" },
+        { label: "5:00 P.M - 7:00 P.M", iconType: "clock" },
+        { label: "Monday to Thursday", iconType: "calendar" },
+        { label: "Online", iconType: "mode" },
+        { label: "Gulshan-e-Iqbal, Karachi", iconType: "location" },
+        { label: "RS. 12,000", iconType: "price" }
+      ]
     },
     {
       id: "CRS-202",
@@ -105,9 +105,15 @@ const CourseManagement = () => {
       duration: "16 Weeks",
       totalModules: 14,
       completionRate: "92%",
-      recentUpdates: [
-        { title: "Live Q&A Session", detail: "React & Node.js Deployment • Aug 04, 2026" }
-      ],
+      description: "Master real-world application engineering from dynamic front-end UI frameworks like React to production-grade Java Spring Boot and Node.js microservices.",
+      features: [
+        { label: "32 Classes total", iconType: "book" },
+        { label: "8:00 P.M - 10:00 P.M", iconType: "clock" },
+        { label: "Tuesday, Thursday & Saturday", iconType: "calendar" },
+        { label: "Tutor's Home", iconType: "mode" },
+        { label: "Shadman Town, Lahore", iconType: "location" },
+        { label: "RS. 18,000", iconType: "price" }
+      ]
     },
     {
       id: "CRS-203",
@@ -121,9 +127,15 @@ const CourseManagement = () => {
       duration: "6 Weeks",
       totalModules: 6,
       completionRate: "80%",
-      recentUpdates: [
-        { title: "Mock Test 3 Uploaded", detail: "Speaking Assessment Rubric • Aug 02, 2026" }
-      ],
+      description: "Intensive training program focused on IELTS Academic reading, listening, essay writing, and interactive mock speaking assessments.",
+      features: [
+        { label: "12 Mock Tests & Exercises", iconType: "book" },
+        { label: "4:00 P.M - 6:00 P.M", iconType: "clock" },
+        { label: "Saturday & Sunday", iconType: "calendar" },
+        { label: "Student's Home", iconType: "mode" },
+        { label: "Nazimabad, Karachi", iconType: "location" },
+        { label: "RS. 15,000", iconType: "price" }
+      ]
     },
     {
       id: "CRS-204",
@@ -137,9 +149,15 @@ const CourseManagement = () => {
       duration: "8 Weeks",
       totalModules: 8,
       completionRate: "75%",
-      recentUpdates: [
-        { title: "Course Archived", detail: "Term Completed • Jun 20, 2026" }
-      ],
+      description: "In-depth overview of chemical structures, stereochemistry, reaction mechanisms, and foundational lab safety procedures.",
+      features: [
+        { label: "16 Interactive Lectures", iconType: "book" },
+        { label: "3:00 P.M - 5:00 P.M", iconType: "clock" },
+        { label: "Monday & Wednesday", iconType: "calendar" },
+        { label: "Tutor's Home", iconType: "mode" },
+        { label: "Clifton, Karachi", iconType: "location" },
+        { label: "RS. 10,000", iconType: "price" }
+      ]
     },
     {
       id: "CRS-205",
@@ -153,13 +171,87 @@ const CourseManagement = () => {
       duration: "10 Weeks",
       totalModules: 8,
       completionRate: "0%",
-      recentUpdates: [
-        { title: "Draft Created", detail: "Pending Curriculum Approval • Jul 28, 2026" }
-      ],
+      description: "Analytical breakdown of differential equations, matrix operations, vector spaces, and mathematical modeling techniques.",
+      features: [
+        { label: "20 Problem Solving Workshops", iconType: "book" },
+        { label: "6:00 P.M - 8:00 P.M", iconType: "clock" },
+        { label: "Friday & Sunday", iconType: "calendar" },
+        { label: "Online", iconType: "mode" },
+        { label: "Remote", iconType: "location" },
+        { label: "RS. 11,000", iconType: "price" }
+      ]
     },
   ]);
 
-  // Handle Confirmed Deletion / Archiving
+  const renderFeatureIcon = (type, label = '') => {
+    const modeText = (label || '').toLowerCase();
+
+    // Online Mode Icon (Mobile / Device View)
+    if (modeText.includes('online') || (type === 'mode' && modeText.includes('online'))) {
+      return (
+        <svg className="w-5 h-5 text-gray-700 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <rect x="7" y="2" width="10" height="20" rx="2" ry="2" strokeWidth="1.8" />
+          <line x1="11" y1="18" x2="13" y2="18" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      );
+    }
+
+    // Tutor's Home Icon (Main House / Structure)
+    if (modeText.includes("tutor's home") || modeText.includes("tutor home")) {
+      return (
+        <svg className="w-5 h-5 text-gray-700 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+        </svg>
+      );
+    }
+
+    // Student's Home Icon (Home + User Profile Badge)
+    if (modeText.includes("student's home") || modeText.includes("student home")) {
+      return (
+        <svg className="w-5 h-5 text-gray-700 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg>
+      );
+    }
+
+    switch (type) {
+      case 'book':
+        return (
+          <svg className="w-5 h-5 text-gray-700 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+          </svg>
+        );
+      case 'clock':
+        return (
+          <svg className="w-5 h-5 text-gray-700 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        );
+      case 'calendar':
+        return (
+          <svg className="w-5 h-5 text-gray-700 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+        );
+      case 'location':
+        return (
+          <svg className="w-5 h-5 text-gray-700 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        );
+      case 'price':
+      default:
+        return (
+          <svg className="w-5 h-5 text-gray-700 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <rect x="3" y="6" width="18" height="12" rx="2" strokeWidth="1.8"/>
+            <circle cx="12" cy="12" r="2.5" strokeWidth="1.8" />
+            <path strokeLinecap="round" strokeWidth="1.8" d="M6 9v0M18 15v0"/>
+          </svg>
+        );
+    }
+  };
+
   const confirmDeleteCourse = () => {
     if (!courseToDelete) return;
     setCourses((prev) => prev.filter((c) => c.id !== courseToDelete.id));
@@ -169,7 +261,6 @@ const CourseManagement = () => {
     setCourseToDelete(null);
   };
 
-  // Filter Logic
   const filteredCourses = courses.filter((course) => {
     const matchesStatus =
       statusFilter === 'All Statuses' ? true : course.status === statusFilter;
@@ -187,7 +278,6 @@ const CourseManagement = () => {
     return matchesStatus && matchesCategory && matchesSearch;
   });
 
-  // Export Data PDF
   const handleExportPDF = () => {
     const doc = new jsPDF();
     doc.setFontSize(16);
@@ -269,7 +359,6 @@ const CourseManagement = () => {
               </div>
             </div>
 
-            {/* Filters Bar */}
             <div className="bg-white p-3 rounded-2xl border border-gray-100 flex items-center justify-between text-xs">
               <div className="flex items-center gap-4">
                 <CustomDropdown
@@ -301,7 +390,6 @@ const CourseManagement = () => {
               </div>
             </div>
 
-            {/* Courses Table */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-x-auto">
               <table className="w-full min-w-[640px] text-left border-collapse text-xs">
                 <thead>
@@ -392,7 +480,6 @@ const CourseManagement = () => {
         )}
       </main>
 
-      {/* Slide-over Right Drawer */}
       {selectedCourse && (
         <aside className="w-96 bg-white border-l border-gray-200 h-screen overflow-y-auto flex flex-col justify-between p-6 shadow-xl z-20 sticky top-0">
           <div className="space-y-6">
@@ -457,30 +544,60 @@ const CourseManagement = () => {
               </div>
             </div>
 
+            <div className="space-y-2">
+              <h5 className="text-xs font-bold text-gray-900">
+                About Course
+              </h5>
+              <p className="text-xs text-gray-600 leading-relaxed">
+                {selectedCourse.description || "Comprehensive educational module designed for practical learning, combining live sessions, interactive assessments, and expert guidance."}
+              </p>
+            </div>
+
             <div className="space-y-3">
               <h5 className="text-xs font-bold text-gray-900">
-                Course Updates
+                What this course provide
               </h5>
-              <div className="space-y-3 text-xs">
-                {selectedCourse.recentUpdates?.map((act, index) => (
-                  <div key={index} className="flex gap-2.5">
-                    <span className="text-black font-bold text-base leading-none">
-                      •
-                    </span>
-                    <div>
-                      <p className="font-bold text-gray-900">{act.title}</p>
-                      <p className="text-[10px] text-gray-400">{act.detail}</p>
+              <div className="space-y-3 text-xs text-gray-700 font-medium">
+                {selectedCourse.features && selectedCourse.features.length > 0 ? (
+                  selectedCourse.features.map((feature, idx) => (
+                    <div key={idx} className="flex items-center gap-3">
+                      {renderFeatureIcon(feature.iconType, feature.label)}
+                      <span>{feature.label}</span>
                     </div>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <>
+                    <div className="flex items-center gap-3">
+                      {renderFeatureIcon('book')}
+                      <span>20 Classes per month</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {renderFeatureIcon('clock')}
+                      <span>6:00 P.M - 8:00 P.M</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {renderFeatureIcon('calendar')}
+                      <span>Monday to Friday</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {renderFeatureIcon('mode', 'Online')}
+                      <span>Online</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {renderFeatureIcon('location')}
+                      <span>Nazimabad, Karachi</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {renderFeatureIcon('price')}
+                      <span>RS. 9,000</span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
 
           <div className="pt-6 border-t border-gray-100 space-y-2">
-            <button className="w-full py-2.5 bg-black text-white text-xs font-bold rounded-xl hover:bg-zinc-800 transition-colors cursor-pointer">
-              Edit Course Content
-            </button>
             <button
               onClick={() => setCourseToDelete(selectedCourse)}
               className="w-full py-2.5 border border-red-300 text-red-600 text-xs font-bold rounded-xl hover:bg-red-50 transition-colors cursor-pointer"
@@ -491,7 +608,6 @@ const CourseManagement = () => {
         </aside>
       )}
 
-      {/* Delete Confirmation Modal Overlay */}
       {courseToDelete && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full border border-gray-100 shadow-xl space-y-4">
