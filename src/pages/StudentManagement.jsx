@@ -380,8 +380,8 @@ const StudentManagement = () => {
             </div>
 
             {/* Filters Bar */}
-            <div className="bg-white p-3 rounded-2xl border border-gray-100 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-4">
+            <div className="bg-white p-3 rounded-2xl border border-gray-100 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 text-xs">
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4 w-full sm:w-auto">
                 <CustomDropdown
                   label="STATUS"
                   value={statusFilter}
@@ -417,7 +417,7 @@ const StudentManagement = () => {
                 />
               </div>
 
-              <div className="text-gray-400 text-xs font-medium">
+              <div className="text-gray-400 text-xs font-medium shrink-0">
                 Showing {filteredStudents.length} of {students.length} students
               </div>
             </div>

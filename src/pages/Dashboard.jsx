@@ -2,27 +2,35 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Navbar from '../components/Navbar';
-import NotificationsPage from './NotificationsPage'; 
+import NotificationsPage from './NotificationsPage';
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const [viewState, setViewState] = useState('dashboard'); // Handles view switching
+  const [viewState, setViewState] = useState('dashboard');
   const [viewMode, setViewMode] = useState('monthly');
   const [showAllRegistrations, setShowAllRegistrations] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Modal state for popup messages with white background styling
   const [modalConfig, setModalConfig] = useState({ isOpen: false, type: '', message: '' });
 
-  // Dynamic greeting based on current time
+  // Get current date details dynamically
+  const currentDate = new Date();
+  const currentMonthIndex = currentDate.getMonth(); // 0 = JAN, 7 = AUG, etc.
+  const currentDayIndex = currentDate.getDay(); // 0 = SUN, 1 = MON, 6 = SAT
+
+  const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+
+  const currentMonthCode = monthNames[currentMonthIndex];
+  const currentDayCode = dayNames[currentDayIndex];
+
   const getGreeting = () => {
-    const hour = new Date().getHours();
+    const hour = currentDate.getHours();
     if (hour < 12) return 'Good Morning';
     if (hour < 17) return 'Good Afternoon';
     return 'Good Evening';
   };
 
-  // Full dataset for Recent Registrations
   const allRegistrations = [
     { initials: 'HM', name: 'Hassan Malik', email: 'hassan.malik@gmail.com', role: 'Tutor', subject: 'Computer Science', status: 'ACTIVE' },
     { initials: 'AN', name: 'Ayesha Noor', email: 'ayesha.noor@edu.com', role: 'Student', subject: 'Mathematics', status: 'ACTIVE' },
@@ -34,61 +42,67 @@ const Dashboard = () => {
     { initials: 'NM', name: 'Nimra Malik', email: 'nimra.malik@outlook.com', role: 'Student', subject: 'Economics', status: 'ACTIVE' },
     { initials: 'FA', name: 'Fahad Ahmed', email: 'fahad.ahmed@tech.io', role: 'Tutor', subject: 'Programming', status: 'PENDING' },
     { initials: 'MS', name: 'Maryam Siddiqui', email: 'maryam.s@edu.com', role: 'Student', subject: 'History', status: 'ACTIVE' },
-    { initials: 'OA', name: 'Omer Aslam', email: 'omer.aslam@gmail.com', role: 'Tutor', subject: 'Artificial Intelligence', status: 'ACTIVE' },
-    { initials: 'LA', name: 'Laiba Anwar', email: 'laiba.anwar@domain.com', role: 'Student', subject: 'Graphic Design', status: 'PENDING' },
-    { initials: 'SJ', name: 'Saad Javed', email: 'saad.javed@edu.com', role: 'Tutor', subject: 'Data Science', status: 'ACTIVE' },
-    { initials: 'ER', name: 'Eman Riaz', email: 'eman.riaz@gmail.com', role: 'Student', subject: 'Psychology', status: 'ACTIVE' },
-    { initials: 'TM', name: 'Talha Mehmood', email: 'talha.m@tech.io', role: 'Tutor', subject: 'Software Engineering', status: 'PENDING' },
   ];
 
-  // Filter registrations based on search input
   const filteredRegistrations = allRegistrations.filter((user) =>
     user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
     user.subject.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Control visible rows based on toggle state
   const visibleRegistrations = showAllRegistrations 
     ? filteredRegistrations 
     : filteredRegistrations.slice(0, 3);
 
-  // Sample chart data
-  const monthlyData = [
+  // Dynamic monthly registration values
+  const rawMonthlyData = [
     { label: 'JAN', val: 40 },
     { label: 'FEB', val: 65 },
     { label: 'MAR', val: 50 },
     { label: 'APR', val: 75 },
     { label: 'MAY', val: 60 },
-    { label: 'JUN', val: 95, active: true },
+    { label: 'JUN', val: 95 },
     { label: 'JUL', val: 80 },
-    { label: 'AUG', val: 70 },
+    { label: 'AUG', val: 85 },
     { label: 'SEP', val: 60 },
     { label: 'OCT', val: 75 },
+    { label: 'NOV', val: 70 },
+    { label: 'DEC', val: 90 },
   ];
 
-  const weeklyData = [
-    { label: 'MON', val: 30 },
+  // Dynamic weekly registration values (Mon -> Sun order)
+  const rawWeeklyData = [
+    { label: 'MON', val: 35 },
     { label: 'TUE', val: 50 },
-    { label: 'WED', val: 70 },
-    { label: 'THU', val: 90, active: true },
+    { label: 'WED', val: 65 },
+    { label: 'THU', val: 80 },
     { label: 'FRI', val: 60 },
-    { label: 'SAT', val: 40 },
-    { label: 'SUN', val: 25 },
+    { label: 'SAT', val: 90 },
+    { label: 'SUN', val: 40 },
   ];
+
+  // Mark current active status dynamically
+  const monthlyData = rawMonthlyData.map(item => ({
+    ...item,
+    active: item.label === currentMonthCode
+  }));
+
+  const weeklyData = rawWeeklyData.map(item => ({
+    ...item,
+    active: item.label === currentDayCode
+  }));
 
   const chartData = viewMode === 'monthly' ? monthlyData : weeklyData;
 
   return (
     <div className="flex h-screen bg-[#F5F5F7] font-sans text-gray-900 overflow-hidden">
       
-      {/* ---------------- SIDEBAR COMPONENT ---------------- */}
+      {/* SIDEBAR COMPONENT */}
       <Sidebar onGenerateReport={() => setModalConfig({ isOpen: true, type: 'Report', message: 'Generating summary report...' })} />
 
-      {/* ---------------- MAIN CONTENT AREA ---------------- */}
+      {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col overflow-y-auto">
         
-        {/* Reusable Navbar Component */}
         <Navbar 
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
@@ -97,15 +111,14 @@ const Dashboard = () => {
           placeholder="Search tutors or applications..."
         />
 
-        {/* Dynamic Main Body Content */}
         {viewState === 'notifications' ? (
           <NotificationsPage />
         ) : (
-          <div className="p-4 sm:p-6 lg:p-8 space-y-8">
+          <div className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8">
             
-            {/* Dynamic Greeting Heading */}
+            {/* Dynamic Greeting Header */}
             <div>
-              <h2 className="text-2xl font-bold tracking-tight text-gray-900">
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900">
                 {getGreeting()}, Admin.
               </h2>
               <p className="text-xs text-gray-500 mt-1">Here's what's happening across the TUTR network today.</p>
@@ -113,53 +126,53 @@ const Dashboard = () => {
 
             {/* Stat Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
-              <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between">
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between">
                 <div className="flex justify-between items-start">
                   <div className="p-2.5 bg-gray-100 rounded-xl">
                     <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
                   </div>
                   <span className="px-2 py-1 bg-green-50 text-green-600 text-[11px] font-semibold rounded-md">+12%</span>
                 </div>
-                <div className="mt-6">
+                <div className="mt-5 sm:mt-6">
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TOTAL USERS</p>
                   <p className="text-2xl font-extrabold text-gray-900 mt-1">24,592</p>
                 </div>
               </div>
 
-              <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between">
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between">
                 <div className="flex justify-between items-start">
                   <div className="p-2.5 bg-gray-100 rounded-xl">
                     <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0112 20.055a11.952 11.952 0 01-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"/></svg>
                   </div>
                   <span className="px-2 py-1 bg-green-50 text-green-600 text-[11px] font-semibold rounded-md">+5%</span>
                 </div>
-                <div className="mt-6">
+                <div className="mt-5 sm:mt-6">
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TOTAL TUTORS</p>
                   <p className="text-2xl font-extrabold text-gray-900 mt-1">1,204</p>
                 </div>
               </div>
 
-              <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between">
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between">
                 <div className="flex justify-between items-start">
                   <div className="p-2.5 bg-gray-100 rounded-xl">
                     <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
                   </div>
                   <span className="px-2 py-1 bg-green-50 text-green-600 text-[11px] font-semibold rounded-md">+18%</span>
                 </div>
-                <div className="mt-6">
+                <div className="mt-5 sm:mt-6">
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TOTAL STUDENTS</p>
                   <p className="text-2xl font-extrabold text-gray-900 mt-1">23,388</p>
                 </div>
               </div>
 
-              <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between">
+              <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between">
                 <div className="flex justify-between items-start">
                   <div className="p-2.5 bg-red-50 text-red-500 rounded-xl">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
                   </div>
                   <span className="px-2.5 py-1 bg-red-50 text-red-500 text-[11px] font-semibold rounded-md">High Priority</span>
                 </div>
-                <div className="mt-6">
+                <div className="mt-5 sm:mt-6">
                   <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PENDING VERIFICATIONS</p>
                   <p className="text-2xl font-extrabold text-gray-900 mt-1">42</p>
                 </div>
@@ -169,21 +182,26 @@ const Dashboard = () => {
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 sm:gap-8">
               <div className="xl:col-span-2 space-y-6 sm:space-y-8">
                 
-                {/* Registrations Chart */}
-                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs">
-                  <div className="flex items-center justify-between mb-6">
+                {/* DYNAMIC REGISTRATIONS CHART */}
+                <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
                     <div>
-                      <h3 className="font-bold text-base text-gray-900">
-                        {viewMode === 'monthly' ? 'Monthly Registrations' : 'Weekly Registrations'}
-                      </h3>
-                      <p className="text-xs text-gray-400 mt-0.5">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-sm sm:text-base text-gray-900">
+                          {viewMode === 'monthly' ? 'Monthly Registrations' : 'Weekly Registrations'}
+                        </h3>
+                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold rounded-full">
+                          {viewMode === 'monthly' ? `Current: ${currentMonthCode}` : `Today: ${currentDayCode}`}
+                        </span>
+                      </div>
+                      <p className="text-[11px] sm:text-xs text-gray-400 mt-0.5">
                         {viewMode === 'monthly' 
-                          ? 'Growth trends for the current fiscal year' 
-                          : 'Growth trends for the current week'}
+                          ? 'Growth trends across the year' 
+                          : 'Growth trends across the current week'}
                       </p>
                     </div>
 
-                    <div className="flex bg-gray-100 p-1 rounded-xl text-[10px] font-bold">
+                    <div className="flex bg-gray-100 p-1 rounded-xl text-[10px] font-bold self-start sm:self-auto">
                       <button 
                         onClick={() => setViewMode('weekly')}
                         className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
@@ -207,23 +225,41 @@ const Dashboard = () => {
                     </div>
                   </div>
 
-                  <div className="h-44 flex items-end justify-between pt-6 px-2 gap-3 border-b border-gray-100 pb-2">
-                    {chartData.map((item, idx) => (
-                      <div key={idx} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
-                        <div 
-                          style={{ height: `${item.val}%` }} 
-                          className={`w-full rounded-t-md ${item.active ? 'bg-black' : 'bg-gray-200'} transition-all duration-300`}
-                        ></div>
-                        <span className="text-[10px] font-bold text-gray-400">{item.label}</span>
-                      </div>
-                    ))}
+                  {/* Dynamic Interactive Chart Bars */}
+                  <div className="overflow-x-auto no-scrollbar">
+                    <div className="h-48 flex items-end justify-between pt-8 px-1 gap-1.5 sm:gap-3 border-b border-gray-100 pb-2 min-w-[320px]">
+                      {chartData.map((item, idx) => (
+                        <div key={idx} className="flex-1 flex flex-col items-center gap-2 h-full justify-end min-w-0 group relative">
+                          
+                          {/* Hover Tooltip Value */}
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-3 bg-black text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs pointer-events-none">
+                            {item.val}%
+                          </div>
+
+                          <div 
+                            style={{ height: `${item.val}%` }} 
+                            className={`w-full max-w-[14px] sm:max-w-none rounded-t-sm sm:rounded-t-md transition-all duration-300 ${
+                              item.active 
+                                ? 'bg-black ring-2 ring-black/10' 
+                                : 'bg-gray-200 group-hover:bg-gray-300'
+                            }`}
+                          ></div>
+                          
+                          <span className={`text-[8px] sm:text-[10px] font-bold truncate w-full text-center ${
+                            item.active ? 'text-black font-extrabold' : 'text-gray-400'
+                          }`}>
+                            {item.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
                 {/* Recent Registrations Table Section */}
-                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs">
+                <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-xs">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold text-base text-gray-900">Recent Registrations</h3>
+                    <h3 className="font-bold text-sm sm:text-base text-gray-900">Recent Registrations</h3>
                     
                     <button 
                       onClick={() => setShowAllRegistrations(!showAllRegistrations)}
@@ -251,7 +287,7 @@ const Dashboard = () => {
                           visibleRegistrations.map((user, idx) => (
                             <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
                               <td className="py-3.5 px-2 flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center font-bold text-xs">
+                                <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center font-bold text-xs shrink-0">
                                   {user.initials}
                                 </div>
                                 <div>
@@ -292,8 +328,8 @@ const Dashboard = () => {
               </div>
 
               {/* Right Column Progress Bars */}
-              <div className="space-y-8">
-                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-5">
+              <div className="space-y-6 sm:space-y-8">
+                <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-5">
                   <h3 className="font-bold text-sm text-gray-900">Teaching Mode</h3>
                   
                   <div className="space-y-3">
@@ -333,7 +369,7 @@ const Dashboard = () => {
                   </div>
                 </div>
 
-                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-5">
+                <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-5">
                   <h3 className="font-bold text-sm text-gray-900">Course Categories</h3>
                   
                   <div className="space-y-4">

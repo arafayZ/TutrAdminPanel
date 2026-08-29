@@ -24,17 +24,17 @@ const CustomDropdown = ({ label, value, onChange, options }) => {
   }, []);
 
   return (
-    <div className="flex items-center gap-2 relative" ref={dropdownRef}>
-      {label && <span className="text-[10px] uppercase font-bold text-gray-400">{label}:</span>}
+    <div className="flex items-center gap-2 relative w-full sm:w-auto" ref={dropdownRef}>
+      {label && <span className="text-[10px] uppercase font-bold text-gray-400 whitespace-nowrap">{label}:</span>}
       
-      <div className="relative">
+      <div className="relative flex-1 sm:flex-none">
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium rounded-lg px-3 py-1.5 text-xs flex items-center gap-2 cursor-pointer transition-colors"
+          className="w-full sm:w-auto bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium rounded-lg px-3 py-1.5 text-xs flex items-center justify-between sm:justify-start gap-2 cursor-pointer transition-colors"
         >
-          <span>{value}</span>
-          <span className="text-[10px]">▼</span>
+          <span className="truncate">{value}</span>
+          <span className="text-[10px] flex-shrink-0">▼</span>
         </button>
 
         {isOpen && (
@@ -186,7 +186,6 @@ const CourseManagement = () => {
   const renderFeatureIcon = (type, label = '') => {
     const modeText = (label || '').toLowerCase();
 
-    // Online Mode Icon (Mobile / Device View)
     if (modeText.includes('online') || (type === 'mode' && modeText.includes('online'))) {
       return (
         <svg className="w-5 h-5 text-gray-700 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -196,7 +195,6 @@ const CourseManagement = () => {
       );
     }
 
-    // Tutor's Home Icon (Main House / Structure)
     if (modeText.includes("tutor's home") || modeText.includes("tutor home")) {
       return (
         <svg className="w-5 h-5 text-gray-700 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -205,7 +203,6 @@ const CourseManagement = () => {
       );
     }
 
-    // Student's Home Icon (Home + User Profile Badge)
     if (modeText.includes("student's home") || modeText.includes("student home")) {
       return (
         <svg className="w-5 h-5 text-gray-700 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -327,7 +324,7 @@ const CourseManagement = () => {
           <NotificationsPage onBack={() => setViewState('dashboard')} />
         ) : (
           <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto w-full space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
                   Course Management
@@ -359,8 +356,9 @@ const CourseManagement = () => {
               </div>
             </div>
 
-            <div className="bg-white p-3 rounded-2xl border border-gray-100 flex items-center justify-between text-xs">
-              <div className="flex items-center gap-4">
+            {/* Responsive Filter Container */}
+            <div className="bg-white p-3.5 rounded-2xl border border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
                 <CustomDropdown
                   label="STATUS"
                   value={statusFilter}
@@ -385,7 +383,7 @@ const CourseManagement = () => {
                 />
               </div>
 
-              <div className="text-gray-400 text-xs font-medium">
+              <div className="text-gray-400 text-xs font-medium self-end sm:self-auto pt-1 sm:pt-0">
                 Showing {filteredCourses.length} of {courses.length} courses
               </div>
             </div>
