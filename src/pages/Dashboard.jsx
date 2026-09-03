@@ -273,13 +273,12 @@ const Dashboard = () => {
                   </div>
 
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[560px] text-left border-collapse">
+                    <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="border-b border-gray-100 text-[10px] font-bold uppercase text-gray-400">
-                          <th className="py-3 px-2">USER</th>
-                          <th className="py-3 px-2">ROLE</th>
-                          <th className="py-3 px-2">SUBJECT</th>
-                          <th className="py-3 px-2">STATUS</th>
+                          <th className="py-3 px-2 w-[50%]">USER</th>
+                          <th className="py-3 px-2 w-[25%]">ROLE</th>
+                          <th className="py-3 px-2 w-[25%]">STATUS</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50 text-xs">
@@ -297,11 +296,6 @@ const Dashboard = () => {
                               </td>
                               <td className="py-3.5 px-2 text-gray-600 font-medium">{user.role}</td>
                               <td className="py-3.5 px-2">
-                                <span className="px-2.5 py-1 bg-gray-100 text-gray-600 text-[10px] font-medium rounded-full">
-                                  {user.subject}
-                                </span>
-                              </td>
-                              <td className="py-3.5 px-2">
                                 <span className={`flex items-center gap-1.5 text-[10px] font-bold ${
                                   user.status === 'PENDING' ? 'text-amber-500' : 'text-emerald-500'
                                 }`}>
@@ -315,7 +309,7 @@ const Dashboard = () => {
                           ))
                         ) : (
                           <tr>
-                            <td colSpan="4" className="py-4 text-center text-xs text-gray-400">
+                            <td colSpan="3" className="py-4 text-center text-xs text-gray-400">
                               No records matching "{searchQuery}"
                             </td>
                           </tr>

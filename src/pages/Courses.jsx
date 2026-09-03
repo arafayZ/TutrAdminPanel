@@ -524,22 +524,6 @@ const CourseManagement = () => {
                   {selectedCourse.rating > 0 ? `★ ${selectedCourse.rating}` : 'N/A'}
                 </span>
               </div>
-              <div className="bg-gray-50/80 p-3 rounded-xl border border-gray-100">
-                <span className="text-[9px] font-bold uppercase text-gray-400 block tracking-wider">
-                  MODULES
-                </span>
-                <span className="text-lg font-bold text-gray-900">
-                  {selectedCourse.totalModules}
-                </span>
-              </div>
-              <div className="bg-gray-50/80 p-3 rounded-xl border border-gray-100">
-                <span className="text-[9px] font-bold uppercase text-gray-400 block tracking-wider">
-                  AVG COMPLETION
-                </span>
-                <span className="text-lg font-bold text-gray-900">
-                  {selectedCourse.completionRate}
-                </span>
-              </div>
             </div>
 
             <div className="space-y-2">

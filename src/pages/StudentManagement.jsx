@@ -522,7 +522,7 @@ const StudentManagement = () => {
 
       {/* Slide-over Right Drawer */}
       {selectedStudent && (
-        <aside className="w-96 bg-white border-l border-gray-200 h-screen overflow-y-auto flex flex-col justify-between p-6 shadow-xl z-20 sticky top-0">
+        <aside className="w-full sm:w-96 bg-white border-l border-gray-200 h-screen overflow-y-auto flex flex-col justify-between p-6 pt-16 sm:pt-6 shadow-xl z-20 fixed sm:sticky top-0 right-0">
           <div className="space-y-6">
             <div className="flex items-center justify-between border-b border-gray-100 pb-4">
               <h3 className="text-sm font-bold text-gray-900">
@@ -530,7 +530,7 @@ const StudentManagement = () => {
               </h3>
               <button
                 onClick={() => setSelectedStudent(null)}
-                className="text-gray-400 hover:text-black cursor-pointer text-sm"
+                className="text-gray-400 hover:text-black cursor-pointer text-sm p-1"
               >
                 ✕
               </button>
@@ -550,36 +550,28 @@ const StudentManagement = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 text-left">
-              <div className="bg-gray-50/80 p-3 rounded-xl border border-gray-100">
-                <span className="text-[9px] font-bold uppercase text-gray-400 block tracking-wider">
+            <div className="grid grid-cols-3 gap-2 text-left">
+              <div className="bg-gray-50/80 p-2.5 rounded-xl border border-gray-100">
+                <span className="text-[8px] font-bold uppercase text-gray-400 block tracking-wider">
                   TOTAL COURSES
                 </span>
-                <span className="text-lg font-bold text-gray-900">
+                <span className="text-base font-bold text-gray-900">
                   {selectedStudent.totalCourses}
                 </span>
               </div>
-              <div className="bg-gray-50/80 p-3 rounded-xl border border-gray-100">
-                <span className="text-[9px] font-bold uppercase text-gray-400 block tracking-wider">
-                  COMPLETED
-                </span>
-                <span className="text-lg font-bold text-gray-900">
-                  {selectedStudent.completedCourses}
-                </span>
-              </div>
-              <div className="bg-gray-50/80 p-3 rounded-xl border border-gray-100">
-                <span className="text-[9px] font-bold uppercase text-gray-400 block tracking-wider">
+              <div className="bg-gray-50/80 p-2.5 rounded-xl border border-gray-100">
+                <span className="text-[8px] font-bold uppercase text-gray-400 block tracking-wider">
                   ACTIVE TUTORS
                 </span>
-                <span className="text-lg font-bold text-gray-900">
+                <span className="text-base font-bold text-gray-900">
                   {selectedStudent.activeTutors}
                 </span>
               </div>
-              <div className="bg-gray-50/80 p-3 rounded-xl border border-gray-100">
-                <span className="text-[9px] font-bold uppercase text-gray-400 block tracking-wider">
+              <div className="bg-gray-50/80 p-2.5 rounded-xl border border-gray-100">
+                <span className="text-[8px] font-bold uppercase text-gray-400 block tracking-wider">
                   REPORTS
                 </span>
-                <span className="text-lg font-bold text-gray-900">
+                <span className="text-base font-bold text-gray-900">
                   {selectedStudent.reports}
                 </span>
               </div>
@@ -603,7 +595,7 @@ const StudentManagement = () => {
                       </span>
                     </div>
 
-                    {/* Dual Price Display replacing the Enrolled Badge */}
+                    {/* Dual Price Display */}
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] font-medium text-gray-400 line-through">
                         {course.basePrice}
