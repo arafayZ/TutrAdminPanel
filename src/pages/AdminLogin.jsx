@@ -1,52 +1,104 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, X } from 'lucide-react';
-import tutrLogo from '../assets/app_icon1.png';
-
-// Hardcoded Temporary Credentials
-const TEMP_CREDENTIALS = {
-  email: 'admin@tutr.edu',
-  password: 'admin123'
-};
+import React, { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import {
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  AlertCircle,
+  X,
+} from "lucide-react";
+import tutrLogo from "../assets/app_icon1.png";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  
+
   // Modal & Error States
-  const [errorMessage, setErrorMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState("");
   const [showErrorModal, setShowErrorModal] = useState(false);
 
-  const handleSubmit = (e) => {
+  // Session expired handling
+  useEffect(() => {
+    const reason = searchParams.get("reason");
+    if (reason === "session_expired") {
+      setErrorMessage("Your session has expired. Please log in again.");
+      setShowErrorModal(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Verify against hardcoded credentials
-    if (email === TEMP_CREDENTIALS.email && password === TEMP_CREDENTIALS.password) {
-      console.log('Login successful:', { email, rememberMe });
-      navigate('/dashboard');
-    } else {
-      setErrorMessage('Invalid email or password. Please check your credentials and try again.');
+    if (!email || !password) {
+      setErrorMessage("Please enter both email and password.");
+      setShowErrorModal(true);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        "http://192.168.100.10:8080/api/admin/auth/login",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, rememberMe }),
+        },
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setErrorMessage(
+          data.error ||
+            "Invalid email or password. Please check your credentials.",
+        );
+        setShowErrorModal(true);
+        return;
+      }
+
+      // Store token + user
+      localStorage.setItem("admin_token", data.token);
+      localStorage.setItem(
+        "admin_user",
+        JSON.stringify({
+          id: data.id,
+          email: data.email,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          profileImageUrl: data.profileImageUrl,
+          role: data.role,
+        }),
+      );
+
+      navigate("/dashboard");
+    } catch (err) {
+      setErrorMessage("Network error. Check your connection and try again.");
       setShowErrorModal(true);
     }
   };
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] flex flex-col items-center justify-center p-4 font-sans text-[#1A1A1A] relative">
-      
       {/* Top Header: Logo & Branding */}
       <div className="flex flex-col items-center mb-8">
         <div className="w-16 h-16 bg-black rounded-2xl flex items-center justify-center mb-4 shadow-sm overflow-hidden p-2.5">
-          <img 
-            src={tutrLogo} 
-            alt="TUTR Logo" 
+          <img
+            src={tutrLogo}
+            alt="TUTR Logo"
             className="w-full h-full object-contain"
           />
         </div>
 
-        <h1 className="text-3xl font-black tracking-widest text-black uppercase">TUTR</h1>
+        <h1 className="text-3xl font-black tracking-widest text-black uppercase">
+          TUTR
+        </h1>
         <p className="text-[11px] font-bold tracking-[0.2em] text-gray-400 uppercase mt-1">
           Admin Console Access
         </p>
@@ -54,9 +106,7 @@ const AdminLogin = () => {
 
       {/* Main Login Box */}
       <div className="w-full max-w-[420px] bg-white rounded-3xl p-8 shadow-2xl shadow-gray-200/60 border border-gray-100">
-
         <form onSubmit={handleSubmit} className="space-y-5">
-          
           {/* Email Field */}
           <div>
             <label className="flex items-center text-xs font-semibold text-gray-700 mb-2">
@@ -81,7 +131,7 @@ const AdminLogin = () => {
             </label>
             <div className="relative">
               <input
-                type={showPassword ? 'text' : 'password'}
+                type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
@@ -93,7 +143,11 @@ const AdminLogin = () => {
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none cursor-pointer"
               >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showPassword ? (
+                  <EyeOff className="w-4 h-4" />
+                ) : (
+                  <Eye className="w-4 h-4" />
+                )}
               </button>
             </div>
           </div>
@@ -109,7 +163,10 @@ const AdminLogin = () => {
               />
               Remember me
             </label>
-            <a href="#forgot" className="font-semibold text-black hover:underline">
+            <a
+              href="#forgot"
+              className="font-semibold text-black hover:underline"
+            >
               Forgot password?
             </a>
           </div>
@@ -129,11 +186,17 @@ const AdminLogin = () => {
       <div className="mt-10 text-center text-xs text-gray-500 space-y-3">
         <p>Protected by TUTR Identity Services.</p>
         <div className="flex items-center justify-center gap-3 text-gray-600 font-medium">
-          <a href="#privacy" className="hover:underline">Privacy Policy</a>
+          <a href="#privacy" className="hover:underline">
+            Privacy Policy
+          </a>
           <span className="text-gray-300">•</span>
-          <a href="#terms" className="hover:underline">Terms of Service</a>
+          <a href="#terms" className="hover:underline">
+            Terms of Service
+          </a>
           <span className="text-gray-300">•</span>
-          <a href="#status" className="hover:underline">System Status</a>
+          <a href="#status" className="hover:underline">
+            System Status
+          </a>
         </div>
       </div>
 
@@ -141,8 +204,7 @@ const AdminLogin = () => {
       {showErrorModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-gray-100 text-center animate-in fade-in zoom-in-95 duration-150 relative">
-            
-            <button 
+            <button
               onClick={() => setShowErrorModal(false)}
               className="absolute top-4 right-4 text-gray-400 hover:text-black transition-colors"
             >
@@ -153,10 +215,16 @@ const AdminLogin = () => {
               <AlertCircle className="w-5 h-5" />
             </div>
 
-            <h3 className="font-bold text-sm text-gray-900 mb-1">Authentication Failed</h3>
-            <p className="text-xs text-gray-500 mb-5 leading-relaxed">{errorMessage}</p>
+            <h3 className="font-bold text-sm text-gray-900 mb-1">
+              {errorMessage.includes("session has expired")
+                ? "Session Expired"
+                : "Authentication Failed"}
+            </h3>
+            <p className="text-xs text-gray-500 mb-5 leading-relaxed">
+              {errorMessage}
+            </p>
 
-            <button 
+            <button
               onClick={() => setShowErrorModal(false)}
               className="w-full py-2.5 bg-black text-white font-semibold text-xs rounded-xl hover:bg-zinc-800 transition-colors cursor-pointer"
             >
@@ -165,7 +233,6 @@ const AdminLogin = () => {
           </div>
         </div>
       )}
-
     </div>
   );
 };

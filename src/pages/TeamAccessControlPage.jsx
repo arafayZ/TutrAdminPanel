@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
 
+import { adminFetch, getImageUrl } from "../api/adminClient";
+
 // ---------- Reusable eye icons ----------
 const EyeIcon = ({ className = "w-4 h-4" }) => (
   <svg
@@ -46,7 +48,6 @@ const TeamAccessControlPage = () => {
   const navigate = useNavigate();
 
   // Navigation & View States
-  const [activePage, setActivePage] = useState("team");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterRole, setFilterRole] = useState("All");
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
@@ -55,6 +56,7 @@ const TeamAccessControlPage = () => {
   // Modal States
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isReactivateModalOpen, setIsReactivateModalOpen] = useState(false);
   const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState(null);
@@ -62,20 +64,18 @@ const TeamAccessControlPage = () => {
   // Password visibility toggles
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [showDetailPassword, setShowDetailPassword] = useState(false);
 
   // Change-password sub-form inside detail modal
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
 
-  // See-Detail editable form state
+  // See-Detail editable form state (NO password field)
   const [detailForm, setDetailForm] = useState({
     firstName: "",
     lastName: "",
     dob: "",
     email: "",
-    password: "",
   });
 
   // Add-Member form state
@@ -137,104 +137,51 @@ const TeamAccessControlPage = () => {
   const canChangePassword = newPwdStrength.label === "Strong" && newPwdsMatch;
 
   // ---------- Team Members data ----------
-  const [teamMembers, setTeamMembers] = useState([
-    {
-      id: "1",
-      firstName: "Abdul",
-      lastName: "Rafay",
-      name: "Abdul Rafay",
-      email: "abdul.rafay@tutr.com",
-      dob: "1995-04-12",
-      role: "SUPER ADMIN",
-      status: "Active",
-      initials: "AR",
-      password: "Admin@1234",
-    },
-    {
-      id: "2",
-      firstName: "Muhammad",
-      lastName: "Hamza",
-      name: "Muhammad Hamza",
-      email: "hamza.ahmed@tutr.com",
-      dob: "1997-08-21",
-      role: "ADMIN",
-      status: "Active",
-      initials: "MH",
-      password: "Hamza@2024",
-    },
-    {
-      id: "3",
-      firstName: "Areeba",
-      lastName: "Fatima",
-      name: "Areeba Fatima",
-      email: "areeba.fatima@tutr.com",
-      dob: "1998-02-14",
-      role: "ADMIN",
-      status: "Active",
-      initials: "AF",
-      password: "Areeba#321",
-    },
-    {
-      id: "4",
-      firstName: "Hassan",
-      lastName: "Ali",
-      name: "Hassan Ali",
-      email: "hassan.ali@tutr.com",
-      dob: "1996-11-30",
-      role: "ADMIN",
-      status: "Active",
-      initials: "HA",
-      password: "Hassan@999",
-    },
-    {
-      id: "5",
-      firstName: "Maham",
-      lastName: "Khan",
-      name: "Maham Khan",
-      email: "maham.khan@tutr.com",
-      dob: "1999-06-10",
-      role: "ADMIN",
-      status: "Deactivated",
-      initials: "MK",
-      password: "Maham@5678",
-    },
-    {
-      id: "6",
-      firstName: "Saad",
-      lastName: "Ahmed",
-      name: "Saad Ahmed",
-      email: "saad.ahmed@tutr.com",
-      dob: "1994-01-25",
-      role: "ADMIN",
-      status: "Active",
-      initials: "SA",
-      password: "Saad@1122",
-    },
-    {
-      id: "7",
-      firstName: "Hira",
-      lastName: "Shah",
-      name: "Hira Shah",
-      email: "hira.shah@tutr.com",
-      dob: "1998-09-05",
-      role: "ADMIN",
-      status: "Active",
-      initials: "HS",
-      password: "Hira@3344",
-    },
-    {
-      id: "8",
-      firstName: "Bilal",
-      lastName: "Hussain",
-      name: "Bilal Hussain",
-      email: "bilal.hussain@tutr.com",
-      dob: "1997-03-18",
-      role: "ADMIN",
-      status: "Active",
-      initials: "BH",
-      password: "Bilal@7788",
-    },
-  ]);
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+
+  // ============ LOAD FROM BACKEND ============
+  const loadTeamMembers = async () => {
+    try {
+      setLoading(true);
+      setLoadError(null);
+
+      const response = await adminFetch("/api/admin/team");
+      const data = await response.json();
+
+      if (!response.ok) {
+        setLoadError(data.error || "Failed to load team members");
+        return;
+      }
+
+      // Map backend response → frontend shape
+      const mapped = data.map((a) => ({
+        id: String(a.id),
+        firstName: a.firstName,
+        lastName: a.lastName,
+        name: `${a.firstName} ${a.lastName}`,
+        email: a.email,
+        dob: a.dateOfBirth || "",
+        role: a.role === "SUPER_ADMIN" ? "SUPER ADMIN" : a.role,
+        status: a.isActive ? "Active" : "Deactivated",
+        initials:
+          `${a.firstName?.[0] || ""}${a.lastName?.[0] || ""}`.toUpperCase(),
+        profileImageUrl: a.profileImageUrl || null,
+      }));
+
+      setTeamMembers(mapped);
+    } catch (err) {
+      setLoadError("Network error. Could not reach server.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load on mount
+  useEffect(() => {
+    loadTeamMembers();
+  }, []);
 
   // Close custom dropdown on click outside
   useEffect(() => {
@@ -254,39 +201,44 @@ const TeamAccessControlPage = () => {
   ];
 
   // ---------- Add Member ----------
-  const handleAddMember = (e) => {
+  const handleAddMember = async (e) => {
     e.preventDefault();
     if (!canAddMember) return;
 
-    const fullName = `${formData.firstName} ${formData.lastName}`;
-    const initials = (
-      formData.firstName[0] + (formData.lastName[0] || "")
-    ).toUpperCase();
+    try {
+      const response = await adminFetch("/api/admin/team", {
+        method: "POST",
+        body: JSON.stringify({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          dateOfBirth: formData.dob || null,
+          email: formData.email,
+          password: formData.password,
+          role: formData.role,
+        }),
+      });
 
-    const newMember = {
-      id: Date.now().toString(),
-      firstName: formData.firstName,
-      lastName: formData.lastName,
-      name: fullName,
-      email: formData.email,
-      dob: formData.dob,
-      role: formData.role,
-      status: "Active",
-      initials,
-      password: formData.password,
-    };
+      const data = await response.json();
 
-    setTeamMembers([...teamMembers, newMember]);
-    setFormData({
-      firstName: "",
-      lastName: "",
-      dob: "",
-      email: "",
-      role: "ADMIN",
-      password: "",
-      confirmPassword: "",
-    });
-    setIsAddModalOpen(false);
+      if (!response.ok) {
+        alert(data.error || "Failed to create admin");
+        return;
+      }
+
+      await loadTeamMembers();
+      setFormData({
+        firstName: "",
+        lastName: "",
+        dob: "",
+        email: "",
+        role: "ADMIN",
+        password: "",
+        confirmPassword: "",
+      });
+      setIsAddModalOpen(false);
+    } catch (err) {
+      alert("Network error. Could not create admin.");
+    }
   };
 
   // ---------- Edit Role ----------
@@ -296,15 +248,30 @@ const TeamAccessControlPage = () => {
     setIsEditModalOpen(true);
   };
 
-  const handleUpdateMember = (e) => {
+  const handleUpdateMember = async (e) => {
     e.preventDefault();
-    setTeamMembers(
-      teamMembers.map((m) =>
-        m.id === selectedMember.id ? { ...m, role: formData.role } : m,
-      ),
-    );
-    setIsEditModalOpen(false);
-    setSelectedMember(null);
+
+    try {
+      const response = await adminFetch(
+        `/api/admin/team/${selectedMember.id}/role`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ role: formData.role }),
+        },
+      );
+
+      if (!response.ok) {
+        const data = await response.json();
+        alert(data.error || "Failed to update role");
+        return;
+      }
+
+      await loadTeamMembers();
+      setIsEditModalOpen(false);
+      setSelectedMember(null);
+    } catch (err) {
+      alert("Network error.");
+    }
   };
 
   // ---------- Deactivate / Reactivate ----------
@@ -313,25 +280,60 @@ const TeamAccessControlPage = () => {
     setIsDeactivateModalOpen(true);
   };
 
-  const handleConfirmDeactivate = () => {
-    setTeamMembers(
-      teamMembers.map((m) =>
-        m.id === selectedMember.id ? { ...m, status: "Deactivated" } : m,
-      ),
-    );
-    setIsDeactivateModalOpen(false);
-    setSelectedMember(null);
+  const handleConfirmDeactivate = async () => {
+    try {
+      const response = await adminFetch(
+        `/api/admin/team/${selectedMember.id}/deactivate`,
+        {
+          method: "PUT",
+        },
+      );
+
+      if (!response.ok) {
+        const data = await response.json();
+        alert(data.error || "Failed to deactivate");
+        return;
+      }
+
+      await loadTeamMembers();
+      setIsDeactivateModalOpen(false);
+      setSelectedMember(null);
+    } catch (err) {
+      alert("Network error.");
+    }
   };
 
-  const handleReactivate = (member) => {
-    setTeamMembers(
-      teamMembers.map((m) =>
-        m.id === member.id ? { ...m, status: "Active" } : m,
-      ),
-    );
+  // Open the reactivation confirmation modal
+  const handleOpenReactivate = (member) => {
+    setSelectedMember(member);
+    setIsReactivateModalOpen(true);
   };
 
-  // ---------- See Detail (now editable) ----------
+  // Confirm and perform reactivation
+  const handleConfirmReactivate = async () => {
+    try {
+      const response = await adminFetch(
+        `/api/admin/team/${selectedMember.id}/reactivate`,
+        {
+          method: "PUT",
+        },
+      );
+
+      if (!response.ok) {
+        const data = await response.json();
+        alert(data.error || "Failed to reactivate");
+        return;
+      }
+
+      await loadTeamMembers();
+      setIsReactivateModalOpen(false);
+      setSelectedMember(null);
+    } catch (err) {
+      alert("Network error.");
+    }
+  };
+
+  // ---------- See Detail (NO password field) ----------
   const handleOpenDetail = (member) => {
     setSelectedMember(member);
     setDetailForm({
@@ -339,63 +341,74 @@ const TeamAccessControlPage = () => {
       lastName: member.lastName,
       dob: member.dob,
       email: member.email,
-      password: member.password,
     });
     setNewPassword("");
     setConfirmNewPassword("");
-    setShowDetailPassword(false);
     setShowNewPassword(false);
     setIsDetailModalOpen(true);
   };
 
-  const handleSaveDetails = (e) => {
+  const handleSaveDetails = async (e) => {
     e.preventDefault();
-    const fullName = `${detailForm.firstName} ${detailForm.lastName}`.trim();
-    const initials = (
-      (detailForm.firstName[0] || "") + (detailForm.lastName[0] || "")
-    ).toUpperCase();
 
-    setTeamMembers((prev) =>
-      prev.map((m) =>
-        m.id === selectedMember.id
-          ? {
-              ...m,
-              firstName: detailForm.firstName,
-              lastName: detailForm.lastName,
-              name: fullName,
-              dob: detailForm.dob,
-              email: detailForm.email,
-              password: detailForm.password,
-              initials,
-            }
-          : m,
-      ),
-    );
-    setSelectedMember((prev) => ({
-      ...prev,
+    // Only send editable fields — NO password
+    const body = {
       firstName: detailForm.firstName,
       lastName: detailForm.lastName,
-      name: fullName,
-      dob: detailForm.dob,
+      dateOfBirth: detailForm.dob || null,
       email: detailForm.email,
-      password: detailForm.password,
-      initials,
-    }));
-    alert("Member details updated successfully.");
+    };
+
+    try {
+      const response = await adminFetch(
+        `/api/admin/team/${selectedMember.id}`,
+        {
+          method: "PUT",
+          body: JSON.stringify(body),
+        },
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.error || "Failed to update member");
+        return;
+      }
+
+      await loadTeamMembers();
+      alert("Member details updated successfully.");
+      setIsDetailModalOpen(false);
+      setSelectedMember(null);
+    } catch (err) {
+      alert("Network error.");
+    }
   };
 
-  const handleChangePassword = (e) => {
+  const handleChangePassword = async (e) => {
     e.preventDefault();
     if (!canChangePassword) return;
-    setTeamMembers(
-      teamMembers.map((m) =>
-        m.id === selectedMember.id ? { ...m, password: newPassword } : m,
-      ),
-    );
-    setDetailForm((prev) => ({ ...prev, password: newPassword }));
-    setNewPassword("");
-    setConfirmNewPassword("");
-    alert("Password updated successfully.");
+
+    try {
+      const response = await adminFetch(
+        `/api/admin/team/${selectedMember.id}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ password: newPassword }),
+        },
+      );
+
+      if (!response.ok) {
+        const data = await response.json();
+        alert(data.error || "Failed to change password");
+        return;
+      }
+
+      setNewPassword("");
+      setConfirmNewPassword("");
+      alert("Password updated successfully.");
+    } catch (err) {
+      alert("Network error.");
+    }
   };
 
   // ---------- Message Icon → navigate to Chat ----------
@@ -432,8 +445,7 @@ const TeamAccessControlPage = () => {
 
   return (
     <div className="flex h-screen bg-[#F8F9FB] font-sans text-gray-900 overflow-hidden">
-      <Sidebar activePage={activePage} />
-
+      <Sidebar activePage="team" />
       <main className="flex-1 flex flex-col overflow-y-auto">
         <Navbar
           searchQuery={searchQuery}
@@ -442,6 +454,17 @@ const TeamAccessControlPage = () => {
         />
 
         <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
+          {loading && (
+            <div className="flex justify-center items-center py-20">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
+            </div>
+          )}
+
+          {loadError && !loading && (
+            <div className="bg-red-50 text-red-700 p-4 rounded-xl text-sm">
+              {loadError}
+            </div>
+          )}
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
@@ -619,9 +642,17 @@ const TeamAccessControlPage = () => {
                       >
                         <td className="py-4 px-6">
                           <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-full bg-gray-200 text-gray-700 font-bold text-xs flex items-center justify-center shrink-0">
-                              {member.initials}
-                            </div>
+                            {member.profileImageUrl ? (
+                              <img
+                                src={getImageUrl(member.profileImageUrl)}
+                                alt={member.name}
+                                className="w-9 h-9 rounded-full object-cover shrink-0 border border-gray-200"
+                              />
+                            ) : (
+                              <div className="w-9 h-9 rounded-full bg-gray-200 text-gray-700 font-bold text-xs flex items-center justify-center shrink-0">
+                                {member.initials}
+                              </div>
+                            )}
                             <div>
                               <p className="font-bold text-gray-900">
                                 {member.name}
@@ -714,7 +745,7 @@ const TeamAccessControlPage = () => {
                               </button>
                             ) : (
                               <button
-                                onClick={() => handleReactivate(member)}
+                                onClick={() => handleOpenReactivate(member)}
                                 className="text-emerald-600 hover:text-emerald-700 font-bold text-xs cursor-pointer"
                               >
                                 Reactivate
@@ -982,7 +1013,7 @@ const TeamAccessControlPage = () => {
         </div>
       )}
 
-      {/* ---------- SEE DETAIL MODAL (EDITABLE) ---------- */}
+      {/* ---------- SEE DETAIL MODAL (NO password field) ---------- */}
       {isDetailModalOpen && selectedMember && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full border border-gray-100 shadow-2xl space-y-4 my-8">
@@ -1024,7 +1055,7 @@ const TeamAccessControlPage = () => {
               </div>
             </div>
 
-            {/* Editable fields */}
+            {/* Editable fields — NO PASSWORD */}
             <form onSubmit={handleSaveDetails} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1084,32 +1115,6 @@ const TeamAccessControlPage = () => {
                   }
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-black"
                 />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">
-                  Password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showDetailPassword ? "text" : "password"}
-                    value={detailForm.password}
-                    onChange={(e) =>
-                      setDetailForm({ ...detailForm, password: e.target.value })
-                    }
-                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 pr-10 text-xs focus:outline-none focus:border-black font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowDetailPassword(!showDetailPassword)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black p-1 cursor-pointer"
-                    aria-label={
-                      showDetailPassword ? "Hide password" : "Show password"
-                    }
-                  >
-                    {showDetailPassword ? <EyeOffIcon /> : <EyeIcon />}
-                  </button>
-                </div>
               </div>
 
               <button
@@ -1217,6 +1222,40 @@ const TeamAccessControlPage = () => {
               </button>
               <button
                 onClick={() => setIsDeactivateModalOpen(false)}
+                className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ---------- REACTIVATE MODAL ---------- */}
+      {isReactivateModalOpen && selectedMember && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full border border-gray-100 shadow-2xl space-y-4">
+            <div>
+              <h3 className="text-base font-bold text-gray-900">
+                Reactivate User
+              </h3>
+              <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                Are you sure you want to reactivate{" "}
+                <span className="font-bold text-gray-900">
+                  {selectedMember.name}
+                </span>
+                ? They will regain access to the admin console.
+              </p>
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <button
+                onClick={handleConfirmReactivate}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Confirm Reactivate
+              </button>
+              <button
+                onClick={() => setIsReactivateModalOpen(false)}
                 className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl text-xs transition-colors cursor-pointer"
               >
                 Cancel

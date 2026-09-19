@@ -2,7 +2,12 @@ import React, { useState, useEffect, useRef } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import Sidebar from "../components/Sidebar";
-import DisplayPicture from "../assets/dp.JPG";
+import {
+  adminFetch,
+  adminUpload,
+  getImageUrl,
+  adminLogout,
+} from "../api/adminClient";
 
 // ---------- Reusable eye icons ----------
 const EyeIcon = ({ className = "w-4 h-4" }) => (
@@ -43,25 +48,95 @@ const EyeOffIcon = ({ className = "w-4 h-4" }) => (
   </svg>
 );
 
+// ✅ Reusable avatar component with letter fallback
+const Avatar = ({ imageUrl, name, size = "w-8 h-8", textSize = "text-xs" }) => {
+  if (imageUrl) {
+    return (
+      <img
+        src={imageUrl}
+        alt={name || "Admin"}
+        className={`${size} rounded-full object-cover border border-gray-200 shrink-0`}
+      />
+    );
+  }
+  const letter = (name || "A").trim()[0]?.toUpperCase() || "A";
+  return (
+    <div
+      className={`${size} rounded-full bg-gray-200 text-gray-600 font-bold ${textSize} flex items-center justify-center shrink-0 border border-gray-200`}
+    >
+      {letter}
+    </div>
+  );
+};
+
 const Settings = () => {
   // Search State
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Form State
-  const [profile, setProfile] = useState(() => {
-    const savedName = localStorage.getItem("tutr_user_name");
-    const savedAvatar = localStorage.getItem("tutr_user_avatar");
-    return {
-      firstName: "Abdul",
-      lastName: "Rafay",
-      fullName: savedName || "Abdul Rafay",
-      email: "admin@gmail.com",
-      role: "SUPER ADMIN",
-      status: "Active",
-      dob: "1995-04-12",
-      avatar: savedAvatar || DisplayPicture,
-    };
+  // Form State — no hardcoded image
+  const [profile, setProfile] = useState({
+    firstName: "",
+    lastName: "",
+    fullName: "",
+    email: "",
+    role: "",
+    status: "",
+    dob: "",
+    avatar: null,
   });
+  const [profileLoading, setProfileLoading] = useState(true);
+
+  // Logout modal
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  // ============ LOAD PROFILE FROM BACKEND ============
+  const loadProfile = async () => {
+    try {
+      setProfileLoading(true);
+      console.log("🔍 Loading admin profile...");
+
+      const response = await adminFetch("/api/admin/profile/me");
+      console.log("🔍 Response status:", response.status);
+
+      const data = await response.json();
+      console.log("🔍 Profile data:", data);
+
+      if (!response.ok) {
+        console.error("Failed to load profile:", data.error);
+
+        if (
+          response.status === 404 ||
+          response.status === 401 ||
+          response.status === 403
+        ) {
+          localStorage.removeItem("admin_token");
+          localStorage.removeItem("admin_user");
+          window.location.href = "/login?reason=session_expired";
+          return;
+        }
+        return;
+      }
+
+      setProfile({
+        firstName: data.firstName,
+        lastName: data.lastName,
+        fullName: `${data.firstName} ${data.lastName}`,
+        email: data.email,
+        role: data.role === "SUPER_ADMIN" ? "SUPER ADMIN" : data.role,
+        status: data.isActive ? "Active" : "Deactivated",
+        dob: data.dateOfBirth || "",
+        avatar: data.profileImageUrl ? getImageUrl(data.profileImageUrl) : null,
+      });
+    } catch (err) {
+      console.error("Network error:", err);
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
 
   // Modal & Notification States
   const [alertModal, setAlertModal] = useState({
@@ -128,23 +203,26 @@ const Settings = () => {
     passwordData.newPassword &&
     passwordData.newPassword === passwordData.confirmPassword;
 
-  // Global user update notifier
-  const notifyUserUpdate = (updatedProfile) => {
-    localStorage.setItem("tutr_user_name", updatedProfile.fullName);
-    localStorage.setItem("tutr_user_avatar", updatedProfile.avatar);
-
-    window.dispatchEvent(
-      new CustomEvent("tutr_user_updated", {
-        detail: updatedProfile,
-      }),
-    );
+  // ---------- Logout Handler ----------
+  const handleConfirmLogout = () => {
+    setShowLogoutModal(false);
+    adminLogout(); // clears token + redirects to /login
   };
 
   // Handle Image Update Function
   const applyNewAvatar = (imageUrl) => {
-    const updatedProfile = { ...profile, avatar: imageUrl };
-    setProfile(updatedProfile);
-    notifyUserUpdate(updatedProfile);
+    setProfile((prev) => ({ ...prev, avatar: imageUrl }));
+
+    try {
+      const stored = JSON.parse(localStorage.getItem("admin_user") || "{}");
+      stored.profileImageUrl = imageUrl
+        ? imageUrl.replace(/^https?:\/\/[^/]+/, "")
+        : null;
+      localStorage.setItem("admin_user", JSON.stringify(stored));
+    } catch (e) {
+      // ignore
+    }
+
     setIsAvatarPickerOpen(false);
     stopCamera();
     setAlertModal({
@@ -156,11 +234,48 @@ const Settings = () => {
   };
 
   // Handle File Input Selection
-  const handleAvatarFileSelect = (e) => {
+  const handleAvatarFileSelect = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const imageUrl = URL.createObjectURL(file);
-      applyNewAvatar(imageUrl);
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setAlertModal({
+        isOpen: true,
+        title: "File Too Large",
+        message: "Please choose an image under 5 MB.",
+        type: "danger",
+      });
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("image", file);
+
+    try {
+      const response = await adminUpload(
+        "/api/admin/profile/me/image",
+        formData,
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        setAlertModal({
+          isOpen: true,
+          title: "Upload Failed",
+          message: data.error || "Could not upload the image.",
+          type: "danger",
+        });
+        return;
+      }
+
+      applyNewAvatar(getImageUrl(data.profileImageUrl));
+    } catch (err) {
+      setAlertModal({
+        isOpen: true,
+        title: "Network Error",
+        message: "Could not reach server.",
+        type: "danger",
+      });
     }
   };
 
@@ -195,19 +310,50 @@ const Settings = () => {
     setIsCameraActive(false);
   };
 
-  const capturePhoto = () => {
-    if (videoRef.current) {
-      const canvas = document.createElement("canvas");
-      canvas.width = videoRef.current.videoWidth || 300;
-      canvas.height = videoRef.current.videoHeight || 300;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      const imageUrl = canvas.toDataURL("image/png");
-      applyNewAvatar(imageUrl);
-    }
+  const capturePhoto = async () => {
+    if (!videoRef.current) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = videoRef.current.videoWidth || 300;
+    canvas.height = videoRef.current.videoHeight || 300;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+
+    canvas.toBlob(async (blob) => {
+      if (!blob) return;
+
+      const formData = new FormData();
+      formData.append("image", blob, `camera_${Date.now()}.png`);
+
+      try {
+        const response = await adminUpload(
+          "/api/admin/profile/me/image",
+          formData,
+        );
+        const data = await response.json();
+
+        if (!response.ok) {
+          setAlertModal({
+            isOpen: true,
+            title: "Upload Failed",
+            message: data.error || "Could not upload the photo.",
+            type: "danger",
+          });
+          return;
+        }
+
+        applyNewAvatar(getImageUrl(data.profileImageUrl));
+      } catch (err) {
+        setAlertModal({
+          isOpen: true,
+          title: "Network Error",
+          message: "Could not reach server.",
+          type: "danger",
+        });
+      }
+    }, "image/png");
   };
 
-  // Clean up camera stream on unmount
   useEffect(() => {
     return () => {
       stopCamera();
@@ -215,8 +361,9 @@ const Settings = () => {
   }, []);
 
   // Handle Password Update Submit
-  const handlePasswordSubmit = (e) => {
+  const handlePasswordSubmit = async (e) => {
     e.preventDefault();
+
     if (!passwordData.currentPassword || !passwordData.newPassword) {
       setAlertModal({
         isOpen: true,
@@ -226,6 +373,7 @@ const Settings = () => {
       });
       return;
     }
+
     if (newPwdStrength.label !== "Strong") {
       setAlertModal({
         isOpen: true,
@@ -236,6 +384,7 @@ const Settings = () => {
       });
       return;
     }
+
     if (!passwordsMatch) {
       setAlertModal({
         isOpen: true,
@@ -246,21 +395,54 @@ const Settings = () => {
       return;
     }
 
-    setIsPasswordModalOpen(false);
-    setPasswordData({
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    });
-    setShowCurrent(false);
-    setShowNew(false);
-    setShowConfirm(false);
-    setAlertModal({
-      isOpen: true,
-      title: "Password Changed",
-      message: "Your password has been successfully updated.",
-      type: "success",
-    });
+    try {
+      const response = await adminFetch(
+        "/api/admin/profile/me/change-password",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            currentPassword: passwordData.currentPassword,
+            newPassword: passwordData.newPassword,
+            confirmPassword: passwordData.confirmPassword,
+          }),
+        },
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setAlertModal({
+          isOpen: true,
+          title: "Error",
+          message: data.error || "Failed to change password.",
+          type: "danger",
+        });
+        return;
+      }
+
+      setIsPasswordModalOpen(false);
+      setPasswordData({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+      setShowCurrent(false);
+      setShowNew(false);
+      setShowConfirm(false);
+      setAlertModal({
+        isOpen: true,
+        title: "Password Changed",
+        message: "Your password has been successfully updated.",
+        type: "success",
+      });
+    } catch (err) {
+      setAlertModal({
+        isOpen: true,
+        title: "Network Error",
+        message: "Could not reach server.",
+        type: "danger",
+      });
+    }
   };
 
   // PDF Export
@@ -295,10 +477,18 @@ const Settings = () => {
 
   return (
     <div className="flex h-screen bg-[#F8F9FB] font-sans text-gray-900 overflow-hidden relative">
-      <Sidebar onGenerateReport={handleExportPDF} />
+      <Sidebar activePage="settings" />
 
-      <main className="flex-1 flex flex-col overflow-y-auto">
-        {/* Hidden File Input */}
+      <main className="flex-1 flex flex-col overflow-y-auto relative">
+        {profileLoading && (
+          <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="flex flex-col items-center gap-3">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-black"></div>
+              <p className="text-xs text-gray-500">Loading profile...</p>
+            </div>
+          </div>
+        )}
+
         <input
           type="file"
           ref={fileInputRef}
@@ -335,13 +525,12 @@ const Settings = () => {
               <span className="text-xs font-semibold text-gray-700">
                 {profile.fullName}
               </span>
-              <div className="w-8 h-8 rounded-full bg-gray-200 overflow-hidden border border-gray-200">
-                <img
-                  src={profile.avatar}
-                  alt="Admin Avatar"
-                  className="w-full h-full object-cover"
-                />
-              </div>
+              <Avatar
+                imageUrl={profile.avatar}
+                name={profile.fullName}
+                size="w-8 h-8"
+                textSize="text-xs"
+              />
             </div>
           </div>
         </header>
@@ -352,10 +541,11 @@ const Settings = () => {
             {/* Profile Picture Box */}
             <div className="lg:col-span-4 bg-white rounded-2xl p-6 border border-gray-100 shadow-xs flex flex-col items-center text-center">
               <div className="relative group">
-                <img
-                  src={profile.avatar}
-                  alt={profile.fullName}
-                  className="w-32 h-32 rounded-full object-cover border-2 border-gray-100 shadow-sm"
+                <Avatar
+                  imageUrl={profile.avatar}
+                  name={profile.fullName}
+                  size="w-32 h-32"
+                  textSize="text-5xl"
                 />
                 <button
                   onClick={() => setIsAvatarPickerOpen(true)}
@@ -472,6 +662,41 @@ const Settings = () => {
                     className="px-4 py-2 bg-white border border-gray-200 text-gray-700 text-xs font-semibold rounded-xl hover:bg-gray-50 transition-colors cursor-pointer"
                   >
                     Update Password
+                  </button>
+                </div>
+              </div>
+
+              {/* Logout Section */}
+              <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-xs space-y-6">
+                <div className="flex items-center gap-2">
+                  <svg
+                    className="w-4 h-4 text-red-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                    />
+                  </svg>
+                  <h3 className="text-lg font-bold text-gray-900">Session</h3>
+                </div>
+
+                <div className="flex items-center justify-between pt-2">
+                  <div>
+                    <p className="text-xs font-bold text-gray-900">Logout</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      End your current session and return to the login screen
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowLogoutModal(true)}
+                    className="px-4 py-2 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-xl hover:bg-red-100 transition-colors cursor-pointer"
+                  >
+                    Logout
                   </button>
                 </div>
               </div>
@@ -635,7 +860,6 @@ const Settings = () => {
                     type="button"
                     onClick={() => setShowCurrent(!showCurrent)}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black p-1 cursor-pointer"
-                    aria-label={showCurrent ? "Hide password" : "Show password"}
                   >
                     {showCurrent ? <EyeOffIcon /> : <EyeIcon />}
                   </button>
@@ -663,13 +887,11 @@ const Settings = () => {
                     type="button"
                     onClick={() => setShowNew(!showNew)}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black p-1 cursor-pointer"
-                    aria-label={showNew ? "Hide password" : "Show password"}
                   >
                     {showNew ? <EyeOffIcon /> : <EyeIcon />}
                   </button>
                 </div>
 
-                {/* Strength meter */}
                 {passwordData.newPassword && (
                   <div className="mt-2 flex items-center gap-2">
                     <div className="flex-1 h-1 bg-gray-200 rounded-full overflow-hidden">
@@ -717,7 +939,6 @@ const Settings = () => {
                     type="button"
                     onClick={() => setShowConfirm(!showConfirm)}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black p-1 cursor-pointer"
-                    aria-label={showConfirm ? "Hide password" : "Show password"}
                   >
                     {showConfirm ? <EyeOffIcon /> : <EyeIcon />}
                   </button>
@@ -748,6 +969,36 @@ const Settings = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM LOGOUT MODAL */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full border border-gray-100 shadow-2xl space-y-4">
+            <div>
+              <h4 className="text-base font-bold text-gray-900">
+                Confirm Logout
+              </h4>
+              <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                Are you sure you want to log out of your admin session?
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() => setShowLogoutModal(false)}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmLogout}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       )}
