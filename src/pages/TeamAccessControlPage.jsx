@@ -1,95 +1,240 @@
-import React, { useState, useRef, useEffect } from 'react';
-import Sidebar from '../components/Sidebar';
-import Navbar from '../components/Navbar';
+import React, { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import Sidebar from "../components/Sidebar";
+import Navbar from "../components/Navbar";
+
+// ---------- Reusable eye icons ----------
+const EyeIcon = ({ className = "w-4 h-4" }) => (
+  <svg
+    className={className}
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+    />
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+    />
+  </svg>
+);
+
+const EyeOffIcon = ({ className = "w-4 h-4" }) => (
+  <svg
+    className={className}
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+    />
+  </svg>
+);
 
 const TeamAccessControlPage = () => {
+  const navigate = useNavigate();
+
   // Navigation & View States
-  const [activePage, setActivePage] = useState('team_access_control');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterRole, setFilterRole] = useState('All'); // 'All' | 'SUPER ADMIN' | 'ADMIN' | 'MANAGER'
+  const [activePage, setActivePage] = useState("team");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterRole, setFilterRole] = useState("All");
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  // Modal States (White Popups)
+  // Modal States
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isRevokeModalOpen, setIsRevokeModalOpen] = useState(false);
+  const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState(null);
 
-  // Form State for Add/Edit Member
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    role: 'ADMIN',
+  // Password visibility toggles
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [showDetailPassword, setShowDetailPassword] = useState(false);
+
+  // Change-password sub-form inside detail modal
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+
+  // See-Detail editable form state
+  const [detailForm, setDetailForm] = useState({
+    firstName: "",
+    lastName: "",
+    dob: "",
+    email: "",
+    password: "",
   });
 
-  // Team Members Data
+  // Add-Member form state
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    dob: "",
+    email: "",
+    role: "ADMIN",
+    password: "",
+    confirmPassword: "",
+  });
+
+  // ---------- Password strength helper ----------
+  const getPasswordStrength = (pwd) => {
+    if (!pwd) return { label: "", score: 0, color: "" };
+    let score = 0;
+    if (pwd.length >= 8) score++;
+    if (/[A-Z]/.test(pwd)) score++;
+    if (/[a-z]/.test(pwd)) score++;
+    if (/[0-9]/.test(pwd)) score++;
+    if (/[^A-Za-z0-9]/.test(pwd)) score++;
+
+    if (pwd.length < 6 || score <= 2)
+      return {
+        label: "Weak",
+        score: 1,
+        color: "bg-red-500",
+        text: "text-red-600",
+      };
+    if (score === 3 || score === 4)
+      return {
+        label: "Medium",
+        score: 2,
+        color: "bg-amber-500",
+        text: "text-amber-600",
+      };
+    return {
+      label: "Strong",
+      score: 3,
+      color: "bg-emerald-500",
+      text: "text-emerald-600",
+    };
+  };
+
+  const pwdStrength = getPasswordStrength(formData.password);
+  const passwordsMatch =
+    formData.password && formData.password === formData.confirmPassword;
+  const canAddMember =
+    formData.firstName.trim() &&
+    formData.lastName.trim() &&
+    formData.dob &&
+    formData.email.trim() &&
+    pwdStrength.label === "Strong" &&
+    passwordsMatch;
+
+  const newPwdStrength = getPasswordStrength(newPassword);
+  const newPwdsMatch = newPassword && newPassword === confirmNewPassword;
+  const canChangePassword = newPwdStrength.label === "Strong" && newPwdsMatch;
+
+  // ---------- Team Members data ----------
   const [teamMembers, setTeamMembers] = useState([
-  {
-    id: '1',
-    name: 'Abdul Rafay',
-    email: 'abdul.rafay@tutr.com',
-    role: 'SUPER ADMIN',
-    status: 'Active',
-    initials: 'AR',
-  },
-  {
-    id: '2',
-    name: 'Muhammad Hamza',
-    email: 'hamza.ahmed@tutr.com',
-    role: 'ADMIN',
-    status: 'Active',
-    initials: 'MH',
-  },
-  {
-    id: '3',
-    name: 'Areeba Fatima',
-    email: 'areeba.fatima@tutr.com',
-    role: 'MANAGER',
-    status: 'Active',
-    initials: 'AF',
-  },
-  {
-    id: '4',
-    name: 'Hassan Ali',
-    email: 'hassan.ali@tutr.com',
-    role: 'ADMIN',
-    status: 'Active',
-    initials: 'HA',
-  },
-  {
-    id: '5',
-    name: 'Maham Khan',
-    email: 'maham.khan@tutr.com',
-    role: 'MANAGER',
-    status: 'Pending Invitation',
-    initials: 'MK',
-  },
-  {
-    id: '6',
-    name: 'Saad Ahmed',
-    email: 'saad.ahmed@tutr.com',
-    role: 'ADMIN',
-    status: 'Inactive',
-    initials: 'SA',
-  },
-  {
-    id: '7',
-    name: 'Hira Shah',
-    email: 'hira.shah@tutr.com',
-    role: 'MANAGER',
-    status: 'Active',
-    initials: 'HS',
-  },
-  {
-    id: '8',
-    name: 'Bilal Hussain',
-    email: 'bilal.hussain@tutr.com',
-    role: 'ADMIN',
-    status: 'Pending Invitation',
-    initials: 'BH',
-  },
-]);
+    {
+      id: "1",
+      firstName: "Abdul",
+      lastName: "Rafay",
+      name: "Abdul Rafay",
+      email: "abdul.rafay@tutr.com",
+      dob: "1995-04-12",
+      role: "SUPER ADMIN",
+      status: "Active",
+      initials: "AR",
+      password: "Admin@1234",
+    },
+    {
+      id: "2",
+      firstName: "Muhammad",
+      lastName: "Hamza",
+      name: "Muhammad Hamza",
+      email: "hamza.ahmed@tutr.com",
+      dob: "1997-08-21",
+      role: "ADMIN",
+      status: "Active",
+      initials: "MH",
+      password: "Hamza@2024",
+    },
+    {
+      id: "3",
+      firstName: "Areeba",
+      lastName: "Fatima",
+      name: "Areeba Fatima",
+      email: "areeba.fatima@tutr.com",
+      dob: "1998-02-14",
+      role: "ADMIN",
+      status: "Active",
+      initials: "AF",
+      password: "Areeba#321",
+    },
+    {
+      id: "4",
+      firstName: "Hassan",
+      lastName: "Ali",
+      name: "Hassan Ali",
+      email: "hassan.ali@tutr.com",
+      dob: "1996-11-30",
+      role: "ADMIN",
+      status: "Active",
+      initials: "HA",
+      password: "Hassan@999",
+    },
+    {
+      id: "5",
+      firstName: "Maham",
+      lastName: "Khan",
+      name: "Maham Khan",
+      email: "maham.khan@tutr.com",
+      dob: "1999-06-10",
+      role: "ADMIN",
+      status: "Deactivated",
+      initials: "MK",
+      password: "Maham@5678",
+    },
+    {
+      id: "6",
+      firstName: "Saad",
+      lastName: "Ahmed",
+      name: "Saad Ahmed",
+      email: "saad.ahmed@tutr.com",
+      dob: "1994-01-25",
+      role: "ADMIN",
+      status: "Active",
+      initials: "SA",
+      password: "Saad@1122",
+    },
+    {
+      id: "7",
+      firstName: "Hira",
+      lastName: "Shah",
+      name: "Hira Shah",
+      email: "hira.shah@tutr.com",
+      dob: "1998-09-05",
+      role: "ADMIN",
+      status: "Active",
+      initials: "HS",
+      password: "Hira@3344",
+    },
+    {
+      id: "8",
+      firstName: "Bilal",
+      lastName: "Hussain",
+      name: "Bilal Hussain",
+      email: "bilal.hussain@tutr.com",
+      dob: "1997-03-18",
+      role: "ADMIN",
+      status: "Active",
+      initials: "BH",
+      password: "Bilal@7788",
+    },
+  ]);
 
   // Close custom dropdown on click outside
   useEffect(() => {
@@ -98,46 +243,56 @@ const TeamAccessControlPage = () => {
         setIsFilterDropdownOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Filter options mapping
   const filterOptions = [
-    { label: 'Filter (All)', value: 'All' },
-    { label: 'Super Admin', value: 'SUPER ADMIN' },
-    { label: 'Admin', value: 'ADMIN' },
-    { label: 'Manager', value: 'MANAGER' },
+    { label: "Filter (All)", value: "All" },
+    { label: "Super Admin", value: "SUPER ADMIN" },
+    { label: "Admin", value: "ADMIN" },
   ];
 
-  // Handle Add Member
+  // ---------- Add Member ----------
   const handleAddMember = (e) => {
     e.preventDefault();
-    if (!formData.name || !formData.email) return;
+    if (!canAddMember) return;
+
+    const fullName = `${formData.firstName} ${formData.lastName}`;
+    const initials = (
+      formData.firstName[0] + (formData.lastName[0] || "")
+    ).toUpperCase();
 
     const newMember = {
       id: Date.now().toString(),
-      name: formData.name,
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      name: fullName,
       email: formData.email,
+      dob: formData.dob,
       role: formData.role,
-      status: 'Pending Invitation',
-      initials: formData.name
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2),
+      status: "Active",
+      initials,
+      password: formData.password,
     };
 
     setTeamMembers([...teamMembers, newMember]);
-    setFormData({ name: '', email: '', role: 'ADMIN' });
+    setFormData({
+      firstName: "",
+      lastName: "",
+      dob: "",
+      email: "",
+      role: "ADMIN",
+      password: "",
+      confirmPassword: "",
+    });
     setIsAddModalOpen(false);
   };
 
-  // Handle Edit Member Permissions
+  // ---------- Edit Role ----------
   const handleOpenEdit = (member) => {
     setSelectedMember(member);
-    setFormData({ name: member.name, email: member.email, role: member.role });
+    setFormData((prev) => ({ ...prev, role: member.role }));
     setIsEditModalOpen(true);
   };
 
@@ -145,72 +300,156 @@ const TeamAccessControlPage = () => {
     e.preventDefault();
     setTeamMembers(
       teamMembers.map((m) =>
-        m.id === selectedMember.id ? { ...m, role: formData.role } : m
-      )
+        m.id === selectedMember.id ? { ...m, role: formData.role } : m,
+      ),
     );
     setIsEditModalOpen(false);
     setSelectedMember(null);
   };
 
-  // Handle Revoke / Remove Member
-  const handleOpenRevoke = (member) => {
+  // ---------- Deactivate / Reactivate ----------
+  const handleOpenDeactivate = (member) => {
     setSelectedMember(member);
-    setIsRevokeModalOpen(true);
+    setIsDeactivateModalOpen(true);
   };
 
-  const handleConfirmRevoke = () => {
-    setTeamMembers(teamMembers.filter((m) => m.id !== selectedMember.id));
-    setIsRevokeModalOpen(false);
+  const handleConfirmDeactivate = () => {
+    setTeamMembers(
+      teamMembers.map((m) =>
+        m.id === selectedMember.id ? { ...m, status: "Deactivated" } : m,
+      ),
+    );
+    setIsDeactivateModalOpen(false);
     setSelectedMember(null);
   };
 
-  // Handle Resend Invite
-  const handleResendInvite = (member) => {
-    alert(`Invitation link successfully resent to ${member.email}`);
+  const handleReactivate = (member) => {
+    setTeamMembers(
+      teamMembers.map((m) =>
+        m.id === member.id ? { ...m, status: "Active" } : m,
+      ),
+    );
   };
 
-  // Filtered List
+  // ---------- See Detail (now editable) ----------
+  const handleOpenDetail = (member) => {
+    setSelectedMember(member);
+    setDetailForm({
+      firstName: member.firstName,
+      lastName: member.lastName,
+      dob: member.dob,
+      email: member.email,
+      password: member.password,
+    });
+    setNewPassword("");
+    setConfirmNewPassword("");
+    setShowDetailPassword(false);
+    setShowNewPassword(false);
+    setIsDetailModalOpen(true);
+  };
+
+  const handleSaveDetails = (e) => {
+    e.preventDefault();
+    const fullName = `${detailForm.firstName} ${detailForm.lastName}`.trim();
+    const initials = (
+      (detailForm.firstName[0] || "") + (detailForm.lastName[0] || "")
+    ).toUpperCase();
+
+    setTeamMembers((prev) =>
+      prev.map((m) =>
+        m.id === selectedMember.id
+          ? {
+              ...m,
+              firstName: detailForm.firstName,
+              lastName: detailForm.lastName,
+              name: fullName,
+              dob: detailForm.dob,
+              email: detailForm.email,
+              password: detailForm.password,
+              initials,
+            }
+          : m,
+      ),
+    );
+    setSelectedMember((prev) => ({
+      ...prev,
+      firstName: detailForm.firstName,
+      lastName: detailForm.lastName,
+      name: fullName,
+      dob: detailForm.dob,
+      email: detailForm.email,
+      password: detailForm.password,
+      initials,
+    }));
+    alert("Member details updated successfully.");
+  };
+
+  const handleChangePassword = (e) => {
+    e.preventDefault();
+    if (!canChangePassword) return;
+    setTeamMembers(
+      teamMembers.map((m) =>
+        m.id === selectedMember.id ? { ...m, password: newPassword } : m,
+      ),
+    );
+    setDetailForm((prev) => ({ ...prev, password: newPassword }));
+    setNewPassword("");
+    setConfirmNewPassword("");
+    alert("Password updated successfully.");
+  };
+
+  // ---------- Message Icon → navigate to Chat ----------
+  const handleMessageMember = (member) => {
+    navigate("/chat", {
+      state: {
+        contactName: member.name,
+        contactRole: member.role === "SUPER ADMIN" ? "Super Admin" : "Admin",
+      },
+    });
+  };
+
+  // ---------- Filters ----------
   const filteredMembers = teamMembers.filter((member) => {
     const matchesSearch =
       member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       member.email.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter = filterRole === 'All' || member.role === filterRole;
+    const matchesFilter = filterRole === "All" || member.role === filterRole;
     return matchesSearch && matchesFilter;
   });
 
-  // Derived Counts
-  const totalAdmins = teamMembers.filter((m) => m.role.includes('ADMIN')).length;
-  const superAdmins = teamMembers.filter((m) => m.role === 'SUPER ADMIN').length;
-  const regularAdmins = teamMembers.filter((m) => m.role === 'ADMIN').length;
-  const activeManagers = teamMembers.filter((m) => m.role === 'MANAGER').length;
-  const pendingInvites = teamMembers.filter((m) => m.status === 'Pending Invitation').length;
+  // ---------- Derived Counts ----------
+  const totalAdmins = teamMembers.filter((m) =>
+    m.role.includes("ADMIN"),
+  ).length;
+  const superAdmins = teamMembers.filter(
+    (m) => m.role === "SUPER ADMIN",
+  ).length;
+  const regularAdmins = teamMembers.filter((m) => m.role === "ADMIN").length;
+  const activeUsers = teamMembers.filter((m) => m.status === "Active").length;
+  const deactivatedUsers = teamMembers.filter(
+    (m) => m.status === "Deactivated",
+  ).length;
 
   return (
     <div className="flex h-screen bg-[#F8F9FB] font-sans text-gray-900 overflow-hidden">
-      {/* Sidebar Component */}
-      <Sidebar
-        activePage={activePage}
-        onGenerateReport={() => alert('Generating Administration Report...')}
-      />
+      <Sidebar activePage={activePage} />
 
       <main className="flex-1 flex flex-col overflow-y-auto">
-        {/* Navbar Component */}
         <Navbar
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
-          placeholder="Search tutors or applications..."
+          placeholder="Search team members..."
         />
 
-        {/* Page Content */}
         <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
-          {/* Header Section */}
+          {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
                 Team & Access Control
               </h2>
               <p className="text-xs text-gray-500 mt-1">
-                Manage platform administrators, managers, and their permissions.
+                Manage platform administrators and their permissions.
               </p>
             </div>
 
@@ -218,24 +457,35 @@ const TeamAccessControlPage = () => {
               onClick={() => setIsAddModalOpen(true)}
               className="bg-black hover:bg-zinc-800 text-white font-medium text-xs px-4 py-2.5 rounded-lg transition-all duration-150 cursor-pointer flex items-center justify-center gap-2 shadow-xs self-start sm:self-auto"
             >
-              <span className="text-sm font-bold">+</span> Add Admin/Manager
+              <span className="text-sm font-bold">+</span> Add Admin
             </button>
           </div>
 
-          {/* Metric Stats Section */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {/* Stat Card 1: Total Admins */}
+          {/* Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between h-32">
               <div>
                 <div className="flex items-center gap-2 text-gray-800">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                    />
                   </svg>
                   <span className="text-[10px] font-bold tracking-wider uppercase text-gray-500">
                     Total Admins
                   </span>
                 </div>
-                <h3 className="text-3xl font-extrabold text-gray-900 mt-2">{totalAdmins}</h3>
+                <h3 className="text-3xl font-extrabold text-gray-900 mt-2">
+                  {totalAdmins}
+                </h3>
               </div>
               <div className="flex items-center gap-2 text-[10px] font-semibold text-gray-600">
                 <span className="bg-gray-100 px-2 py-0.5 rounded-full">
@@ -247,72 +497,73 @@ const TeamAccessControlPage = () => {
               </div>
             </div>
 
-            {/* Stat Card 2: Active Managers */}
             <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between h-32">
               <div>
                 <div className="flex items-center gap-2 text-gray-800">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+                    />
                   </svg>
                   <span className="text-[10px] font-bold tracking-wider uppercase text-gray-500">
-                    Active Managers
+                    Users
                   </span>
                 </div>
-                <h3 className="text-3xl font-extrabold text-gray-900 mt-2">{activeManagers}</h3>
+                <h3 className="text-3xl font-extrabold text-gray-900 mt-2">
+                  {activeUsers}
+                </h3>
               </div>
               <div className="text-right">
                 <span className="text-[10px] text-gray-400 font-medium">
-                  {pendingInvites} Pending Invites
+                  {deactivatedUsers} Deactivated
                 </span>
               </div>
             </div>
-
-            {/* Stat Card 3: Security & Audit */}
-            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between h-32">
-              <div>
-                <div className="flex items-center gap-2 text-gray-800">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                  </svg>
-                  <span className="text-[10px] font-bold tracking-wider uppercase text-gray-500">
-                    Security
-                  </span>
-                </div>
-                <h4 className="text-sm font-bold text-gray-900 mt-2">System Secure</h4>
-                <p className="text-[10px] text-gray-400">Last invite sent 2h ago</p>
-              </div>
-              <button
-                onClick={() => alert('Opening System Audit Log...')}
-                className="text-[11px] font-bold text-gray-900 hover:underline flex items-center gap-1 self-start cursor-pointer"
-              >
-                View Audit Log <span className="text-xs">→</span>
-              </button>
-            </div>
           </div>
 
-          {/* Team Members Table Card */}
+          {/* Table */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
-            {/* Card Header & Custom Black Filter Dropdown */}
             <div className="p-5 flex items-center justify-between border-b border-gray-100">
               <h3 className="font-bold text-sm text-gray-900">Team Members</h3>
 
-              {/* Custom Black Dropdown */}
               <div className="flex items-center gap-2" ref={dropdownRef}>
-                <span className="text-xs text-gray-400 font-medium hidden sm:inline">Role:</span>
+                <span className="text-xs text-gray-400 font-medium hidden sm:inline">
+                  Role:
+                </span>
                 <div className="relative">
                   <button
-                    onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
+                    onClick={() =>
+                      setIsFilterDropdownOpen(!isFilterDropdownOpen)
+                    }
                     className="flex items-center gap-2 bg-white border border-gray-300 text-gray-900 text-xs font-semibold px-3 py-1.5 rounded-lg hover:border-black transition-colors cursor-pointer"
                   >
                     <span>
-                      {filterOptions.find((opt) => opt.value === filterRole)?.label || 'Filter (All)'}
+                      {filterOptions.find((opt) => opt.value === filterRole)
+                        ?.label || "Filter (All)"}
                     </span>
-                    <svg className="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                    <svg
+                      className="w-3 h-3 text-gray-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M19 9l-7 7-7-7"
+                      />
                     </svg>
                   </button>
 
-                  {/* Custom Popup Options Menu */}
                   {isFilterDropdownOpen && (
                     <div className="absolute right-0 mt-1.5 w-36 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1 overflow-hidden">
                       {filterOptions.map((option) => {
@@ -326,8 +577,8 @@ const TeamAccessControlPage = () => {
                             }}
                             className={`w-full text-left px-3 py-2 text-xs font-medium cursor-pointer transition-colors ${
                               isSelected
-                                ? 'bg-black text-white'
-                                : 'text-gray-800 hover:bg-gray-100'
+                                ? "bg-black text-white"
+                                : "text-gray-800 hover:bg-gray-100"
                             }`}
                           >
                             {option.label}
@@ -340,9 +591,8 @@ const TeamAccessControlPage = () => {
               </div>
             </div>
 
-            {/* Table Container */}
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[560px] text-left border-collapse">
+              <table className="w-full min-w-[720px] text-left border-collapse">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/50 text-[10px] uppercase font-extrabold tracking-wider text-gray-400">
                     <th className="py-3 px-6">User</th>
@@ -354,100 +604,123 @@ const TeamAccessControlPage = () => {
                 <tbody className="divide-y divide-gray-100 text-xs">
                   {filteredMembers.length === 0 ? (
                     <tr>
-                      <td colSpan="4" className="py-8 text-center text-gray-400 text-xs">
-                        No team members found matching your search.
+                      <td
+                        colSpan="4"
+                        className="py-8 text-center text-gray-400 text-xs"
+                      >
+                        No team members found.
                       </td>
                     </tr>
                   ) : (
                     filteredMembers.map((member) => (
-                      <tr key={member.id} className="hover:bg-gray-50/50 transition-colors">
-                        {/* User Profile */}
+                      <tr
+                        key={member.id}
+                        className="hover:bg-gray-50/50 transition-colors"
+                      >
                         <td className="py-4 px-6">
                           <div className="flex items-center gap-3">
                             <div className="w-9 h-9 rounded-full bg-gray-200 text-gray-700 font-bold text-xs flex items-center justify-center shrink-0">
                               {member.initials}
                             </div>
                             <div>
-                              <p className="font-bold text-gray-900">{member.name}</p>
-                              <p className="text-[11px] text-gray-400">{member.email}</p>
+                              <p className="font-bold text-gray-900">
+                                {member.name}
+                              </p>
+                              <p className="text-[11px] text-gray-400">
+                                {member.email}
+                              </p>
                             </div>
                           </div>
                         </td>
 
-                        {/* Role Badge */}
                         <td className="py-4 px-6">
                           <span
                             className={`inline-block px-2.5 py-1 rounded-xs text-[10px] font-extrabold tracking-wider uppercase ${
-                              member.role === 'SUPER ADMIN'
-                                ? 'bg-black text-white'
-                                : member.role === 'ADMIN'
-                                ? 'bg-gray-200 text-gray-800'
-                                : 'bg-gray-100 text-gray-600'
+                              member.role === "SUPER ADMIN"
+                                ? "bg-black text-white"
+                                : "bg-gray-200 text-gray-800"
                             }`}
                           >
                             {member.role}
                           </span>
                         </td>
 
-                        {/* Status Indicator */}
                         <td className="py-4 px-6">
                           <div className="flex items-center gap-1.5 text-xs font-semibold">
-                            {member.status === 'Active' ? (
+                            {member.status === "Active" ? (
                               <>
                                 <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                                 <span className="text-gray-800">Active</span>
                               </>
                             ) : (
                               <>
-                                <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                                <span className="text-gray-500">Pending Invitation</span>
+                                <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                                <span className="text-red-600">
+                                  Deactivated
+                                </span>
                               </>
                             )}
                           </div>
                         </td>
 
-                        {/* Action Buttons */}
                         <td className="py-4 px-6 text-right font-medium">
-                          {member.role === 'SUPER ADMIN' ? (
+                          <div className="flex items-center justify-end gap-3">
+                            <button
+                              onClick={() => handleMessageMember(member)}
+                              title="Message"
+                              className="text-gray-500 hover:text-black transition-colors cursor-pointer"
+                            >
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth="2"
+                                  d="M8 10h8M8 14h5m-1 7a9 9 0 10-8.485-6.1L3 21l6.1-.515A8.96 8.96 0 0012 21z"
+                                />
+                              </svg>
+                            </button>
+
+                            <span className="text-gray-200">|</span>
+
+                            <button
+                              onClick={() => handleOpenDetail(member)}
+                              className="text-gray-700 hover:text-black font-bold text-xs cursor-pointer"
+                            >
+                              See Detail
+                            </button>
+
+                            <span className="text-gray-200">|</span>
+
                             <button
                               onClick={() => handleOpenEdit(member)}
-                              className="text-gray-500 hover:text-black text-xs font-bold transition-colors cursor-pointer"
+                              className="text-gray-700 hover:text-black font-bold text-xs cursor-pointer"
                             >
-                              Manage
+                              Edit
                             </button>
-                          ) : member.status === 'Pending Invitation' ? (
-                            <div className="flex items-center justify-end gap-3">
+
+                            <span className="text-gray-200">|</span>
+
+                            {member.status === "Active" ? (
                               <button
-                                onClick={() => handleResendInvite(member)}
-                                className="text-gray-900 hover:underline font-bold text-xs cursor-pointer"
-                              >
-                                Resend Invite
-                              </button>
-                              <span className="text-gray-200">|</span>
-                              <button
-                                onClick={() => handleOpenRevoke(member)}
+                                onClick={() => handleOpenDeactivate(member)}
                                 className="text-red-600 hover:text-red-700 font-bold text-xs cursor-pointer"
                               >
-                                Revoke
+                                Deactivate
                               </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-end gap-3">
+                            ) : (
                               <button
-                                onClick={() => handleOpenEdit(member)}
-                                className="text-gray-700 hover:text-black font-bold text-xs cursor-pointer"
+                                onClick={() => handleReactivate(member)}
+                                className="text-emerald-600 hover:text-emerald-700 font-bold text-xs cursor-pointer"
                               >
-                                Edit Permissions
+                                Reactivate
                               </button>
-                              <span className="text-gray-200">|</span>
-                              <button
-                                onClick={() => handleOpenRevoke(member)}
-                                className="text-red-600 hover:text-red-700 font-bold text-xs cursor-pointer"
-                              >
-                                Revoke
-                              </button>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -459,14 +732,14 @@ const TeamAccessControlPage = () => {
         </div>
       </main>
 
-      {/* --- MODALS (STRICTLY WHITE BACKGROUND) --- */}
-
-      {/* Add Admin/Manager Modal */}
+      {/* ---------- ADD MEMBER MODAL ---------- */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full border border-gray-100 shadow-2xl space-y-5">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full border border-gray-100 shadow-2xl space-y-5 my-8">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <h3 className="text-base font-bold text-gray-900">Add New Team Member</h3>
+              <h3 className="text-base font-bold text-gray-900">
+                Add New Team Member
+              </h3>
               <button
                 onClick={() => setIsAddModalOpen(false)}
                 className="text-gray-400 hover:text-black text-lg font-bold cursor-pointer"
@@ -475,50 +748,173 @@ const TeamAccessControlPage = () => {
               </button>
             </div>
 
-            <form onSubmit={handleAddMember} className="space-y-4">
+            <form onSubmit={handleAddMember} className="space-y-3.5">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    First Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.firstName}
+                    onChange={(e) =>
+                      setFormData({ ...formData, firstName: e.target.value })
+                    }
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-black"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    Last Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.lastName}
+                    onChange={(e) =>
+                      setFormData({ ...formData, lastName: e.target.value })
+                    }
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-black"
+                  />
+                </div>
+              </div>
+
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Full Name</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Date of Birth
+                </label>
                 <input
-                  type="text"
+                  type="date"
                   required
-                  placeholder="e.g. Sarah Ahmed"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  value={formData.dob}
+                  onChange={(e) =>
+                    setFormData({ ...formData, dob: e.target.value })
+                  }
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-black"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Email Address</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Email Address
+                </label>
                 <input
                   type="email"
                   required
-                  placeholder="sarah@tutoradmin.com"
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, email: e.target.value })
+                  }
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-black"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Role Assignment</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Role
+                </label>
                 <select
                   value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, role: e.target.value })
+                  }
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-black cursor-pointer"
                 >
                   <option value="ADMIN">ADMIN</option>
-                  <option value="MANAGER">MANAGER</option>
                   <option value="SUPER ADMIN">SUPER ADMIN</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    value={formData.password}
+                    onChange={(e) =>
+                      setFormData({ ...formData, password: e.target.value })
+                    }
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 pr-10 text-xs focus:outline-none focus:border-black"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black p-1 cursor-pointer"
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
+                  >
+                    {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                  </button>
+                </div>
+
+                {formData.password && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <div className="flex-1 h-1 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${pwdStrength.color} transition-all`}
+                        style={{ width: `${(pwdStrength.score / 3) * 100}%` }}
+                      />
+                    </div>
+                    <span
+                      className={`text-[10px] font-bold ${pwdStrength.text}`}
+                    >
+                      {pwdStrength.label}
+                    </span>
+                  </div>
+                )}
+                {formData.password && pwdStrength.label !== "Strong" && (
+                  <p className="text-[10px] text-red-500 mt-1">
+                    Password must be Strong (8+ chars, upper, lower, number &
+                    symbol).
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showConfirm ? "text" : "password"}
+                    required
+                    value={formData.confirmPassword}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        confirmPassword: e.target.value,
+                      })
+                    }
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 pr-10 text-xs focus:outline-none focus:border-black"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirm(!showConfirm)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black p-1 cursor-pointer"
+                    aria-label={showConfirm ? "Hide password" : "Show password"}
+                  >
+                    {showConfirm ? <EyeOffIcon /> : <EyeIcon />}
+                  </button>
+                </div>
+                {formData.confirmPassword && !passwordsMatch && (
+                  <p className="text-[10px] text-red-500 mt-1">
+                    Passwords do not match.
+                  </p>
+                )}
               </div>
 
               <div className="pt-2 flex gap-2">
                 <button
                   type="submit"
-                  className="flex-1 bg-black hover:bg-zinc-800 text-white font-bold py-2.5 rounded-xl text-xs transition-colors cursor-pointer"
+                  disabled={!canAddMember}
+                  className="flex-1 bg-black hover:bg-zinc-800 text-white font-bold py-2.5 rounded-xl text-xs transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  Send Invitation
+                  Add Member
                 </button>
                 <button
                   type="button"
@@ -533,13 +929,13 @@ const TeamAccessControlPage = () => {
         </div>
       )}
 
-      {/* Edit Member Permissions Modal */}
+      {/* ---------- EDIT ROLE MODAL ---------- */}
       {isEditModalOpen && selectedMember && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full border border-gray-100 shadow-2xl space-y-5">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <h3 className="text-base font-bold text-gray-900">
-                Edit Permissions: {selectedMember.name}
+                Edit Role: {selectedMember.name}
               </h3>
               <button
                 onClick={() => setIsEditModalOpen(false)}
@@ -551,29 +947,19 @@ const TeamAccessControlPage = () => {
 
             <form onSubmit={handleUpdateMember} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">System Role</label>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  System Role
+                </label>
                 <select
                   value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, role: e.target.value })
+                  }
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-black cursor-pointer"
                 >
                   <option value="ADMIN">ADMIN</option>
-                  <option value="MANAGER">MANAGER</option>
                   <option value="SUPER ADMIN">SUPER ADMIN</option>
                 </select>
-              </div>
-
-              <div className="bg-gray-50 p-3 rounded-xl text-[11px] text-gray-500 space-y-1">
-                <p className="font-bold text-gray-700">Role Capabilities:</p>
-                {formData.role === 'SUPER ADMIN' && (
-                  <p>• Full system access including billing, security, and admin creation.</p>
-                )}
-                {formData.role === 'ADMIN' && (
-                  <p>• Access to tutor verification, course approvals, and student records.</p>
-                )}
-                {formData.role === 'MANAGER' && (
-                  <p>• View-only access to analytics, reports, and basic user support.</p>
-                )}
               </div>
 
               <div className="pt-2 flex gap-2">
@@ -596,27 +982,241 @@ const TeamAccessControlPage = () => {
         </div>
       )}
 
-      {/* Revoke Access Confirmation Modal */}
-      {isRevokeModalOpen && selectedMember && (
+      {/* ---------- SEE DETAIL MODAL (EDITABLE) ---------- */}
+      {isDetailModalOpen && selectedMember && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full border border-gray-100 shadow-2xl space-y-4 my-8">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <h3 className="text-base font-bold text-gray-900">
+                Member Details
+              </h3>
+              <button
+                onClick={() => setIsDetailModalOpen(false)}
+                className="text-gray-400 hover:text-black text-lg font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Read-only: Role + Status */}
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="bg-gray-50 rounded-xl px-3 py-2">
+                <p className="text-[10px] font-bold uppercase text-gray-400 mb-0.5">
+                  Role
+                </p>
+                <p className="text-xs font-semibold text-gray-900">
+                  {selectedMember.role}
+                </p>
+              </div>
+              <div className="bg-gray-50 rounded-xl px-3 py-2">
+                <p className="text-[10px] font-bold uppercase text-gray-400 mb-0.5">
+                  Status
+                </p>
+                <p
+                  className={`text-xs font-semibold ${
+                    selectedMember.status === "Active"
+                      ? "text-emerald-600"
+                      : "text-red-600"
+                  }`}
+                >
+                  {selectedMember.status}
+                </p>
+              </div>
+            </div>
+
+            {/* Editable fields */}
+            <form onSubmit={handleSaveDetails} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    First Name
+                  </label>
+                  <input
+                    type="text"
+                    value={detailForm.firstName}
+                    onChange={(e) =>
+                      setDetailForm({
+                        ...detailForm,
+                        firstName: e.target.value,
+                      })
+                    }
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-black"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-1">
+                    Last Name
+                  </label>
+                  <input
+                    type="text"
+                    value={detailForm.lastName}
+                    onChange={(e) =>
+                      setDetailForm({ ...detailForm, lastName: e.target.value })
+                    }
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-black"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Date of Birth
+                </label>
+                <input
+                  type="date"
+                  value={detailForm.dob}
+                  onChange={(e) =>
+                    setDetailForm({ ...detailForm, dob: e.target.value })
+                  }
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-black"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={detailForm.email}
+                  onChange={(e) =>
+                    setDetailForm({ ...detailForm, email: e.target.value })
+                  }
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-black"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showDetailPassword ? "text" : "password"}
+                    value={detailForm.password}
+                    onChange={(e) =>
+                      setDetailForm({ ...detailForm, password: e.target.value })
+                    }
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 pr-10 text-xs focus:outline-none focus:border-black font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowDetailPassword(!showDetailPassword)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black p-1 cursor-pointer"
+                    aria-label={
+                      showDetailPassword ? "Hide password" : "Show password"
+                    }
+                  >
+                    {showDetailPassword ? <EyeOffIcon /> : <EyeIcon />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-black hover:bg-zinc-800 text-white font-bold py-2.5 rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Save Changes
+              </button>
+            </form>
+
+            {/* Change Password sub-form */}
+            <div className="border-t border-gray-100 pt-4">
+              <h4 className="text-xs font-bold text-gray-900 mb-3">
+                Change Password
+              </h4>
+              <form onSubmit={handleChangePassword} className="space-y-3">
+                <div className="relative">
+                  <input
+                    type={showNewPassword ? "text" : "password"}
+                    placeholder="New password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 pr-10 text-xs focus:outline-none focus:border-black"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black p-1 cursor-pointer"
+                    aria-label={
+                      showNewPassword ? "Hide password" : "Show password"
+                    }
+                  >
+                    {showNewPassword ? <EyeOffIcon /> : <EyeIcon />}
+                  </button>
+                </div>
+
+                {newPassword && (
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${newPwdStrength.color} transition-all`}
+                        style={{
+                          width: `${(newPwdStrength.score / 3) * 100}%`,
+                        }}
+                      />
+                    </div>
+                    <span
+                      className={`text-[10px] font-bold ${newPwdStrength.text}`}
+                    >
+                      {newPwdStrength.label}
+                    </span>
+                  </div>
+                )}
+
+                <input
+                  type="password"
+                  placeholder="Confirm new password"
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-black"
+                />
+
+                {confirmNewPassword && !newPwdsMatch && (
+                  <p className="text-[10px] text-red-500">
+                    Passwords do not match.
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={!canChangePassword}
+                  className="w-full bg-black hover:bg-zinc-800 text-white font-bold py-2.5 rounded-xl text-xs transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Update Password
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- DEACTIVATE MODAL ---------- */}
+      {isDeactivateModalOpen && selectedMember && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full border border-gray-100 shadow-2xl space-y-4">
             <div>
-              <h3 className="text-base font-bold text-gray-900">Revoke Access</h3>
+              <h3 className="text-base font-bold text-gray-900">
+                Deactivate User
+              </h3>
               <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                Are you sure you want to remove access for{' '}
-                <span className="font-bold text-gray-900">{selectedMember.name}</span>? They will no longer be able to log into the admin console.
+                Are you sure you want to deactivate{" "}
+                <span className="font-bold text-gray-900">
+                  {selectedMember.name}
+                </span>
+                ? They will no longer be able to log into the admin console.
               </p>
             </div>
 
             <div className="space-y-2 pt-2">
               <button
-                onClick={handleConfirmRevoke}
+                onClick={handleConfirmDeactivate}
                 className="w-full py-2.5 bg-[#D32F2F] hover:bg-red-700 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer"
               >
-                Confirm Revoke
+                Confirm Deactivate
               </button>
               <button
-                onClick={() => setIsRevokeModalOpen(false)}
+                onClick={() => setIsDeactivateModalOpen(false)}
                 className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl text-xs transition-colors cursor-pointer"
               >
                 Cancel
