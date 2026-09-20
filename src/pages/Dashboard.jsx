@@ -1,109 +1,236 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import Sidebar from '../components/Sidebar';
-import Navbar from '../components/Navbar';
-import NotificationsPage from './NotificationsPage';
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import Sidebar from "../components/Sidebar";
+import Navbar from "../components/Navbar";
+import NotificationsPage from "./NotificationsPage";
+import { adminFetch } from "../api/adminClient";
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const [viewState, setViewState] = useState('dashboard');
-  const [viewMode, setViewMode] = useState('monthly');
+  const [viewState, setViewState] = useState("dashboard");
+  const [viewMode, setViewMode] = useState("monthly");
   const [showAllRegistrations, setShowAllRegistrations] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  const [modalConfig, setModalConfig] = useState({ isOpen: false, type: '', message: '' });
+  const [searchQuery, setSearchQuery] = useState("");
 
-  // Get current date details dynamically
+  // ---------- Backend data ----------
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const [modalConfig, setModalConfig] = useState({
+    isOpen: false,
+    type: "",
+    message: "",
+  });
+
+  // ---------- Fetch dashboard on mount ----------
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchDashboard = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await adminFetch("/api/admin/dashboard");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (!cancelled) setData(json);
+      } catch (err) {
+        console.error("Failed to load dashboard:", err);
+        if (!cancelled) setError(err.message || "Failed to load dashboard");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    fetchDashboard();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // ---------- Date helpers ----------
   const currentDate = new Date();
-  const currentMonthIndex = currentDate.getMonth(); // 0 = JAN, 7 = AUG, etc.
-  const currentDayIndex = currentDate.getDay(); // 0 = SUN, 1 = MON, 6 = SAT
+  const currentMonthIndex = currentDate.getMonth();
+  const currentDayIndex = currentDate.getDay();
 
-  const monthNames = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-  const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+  const monthNames = [
+    "JAN",
+    "FEB",
+    "MAR",
+    "APR",
+    "MAY",
+    "JUN",
+    "JUL",
+    "AUG",
+    "SEP",
+    "OCT",
+    "NOV",
+    "DEC",
+  ];
+  const dayNames = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
   const currentMonthCode = monthNames[currentMonthIndex];
   const currentDayCode = dayNames[currentDayIndex];
 
   const getGreeting = () => {
     const hour = currentDate.getHours();
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
-    return 'Good Evening';
+    if (hour < 12) return "Good Morning";
+    if (hour < 17) return "Good Afternoon";
+    return "Good Evening";
   };
 
-  const allRegistrations = [
-    { initials: 'HM', name: 'Hassan Malik', email: 'hassan.malik@gmail.com', role: 'Tutor', subject: 'Computer Science', status: 'ACTIVE' },
-    { initials: 'AN', name: 'Ayesha Noor', email: 'ayesha.noor@edu.com', role: 'Student', subject: 'Mathematics', status: 'ACTIVE' },
-    { initials: 'RK', name: 'Rafay Khan', email: 'rafay.khan@outlook.com', role: 'Tutor', subject: 'Physics', status: 'PENDING' },
-    { initials: 'SM', name: 'Sana Mir', email: 'sana.mir@gmail.com', role: 'Student', subject: 'Chemistry', status: 'ACTIVE' },
-    { initials: 'IB', name: 'Ibrahim Butt', email: 'ibrahim.butt@domain.com', role: 'Tutor', subject: 'Biology', status: 'ACTIVE' },
-    { initials: 'HK', name: 'Hira Khan', email: 'hira.khan@edu.com', role: 'Student', subject: 'English', status: 'PENDING' },
-    { initials: 'WA', name: 'Waqas Ali', email: 'waqas.ali@gmail.com', role: 'Tutor', subject: 'Statistics', status: 'ACTIVE' },
-    { initials: 'NM', name: 'Nimra Malik', email: 'nimra.malik@outlook.com', role: 'Student', subject: 'Economics', status: 'ACTIVE' },
-    { initials: 'FA', name: 'Fahad Ahmed', email: 'fahad.ahmed@tech.io', role: 'Tutor', subject: 'Programming', status: 'PENDING' },
-    { initials: 'MS', name: 'Maryam Siddiqui', email: 'maryam.s@edu.com', role: 'Student', subject: 'History', status: 'ACTIVE' },
-  ];
+  // ---------- Derived data ----------
+  const stats = data?.stats || {
+    totalUsers: 0,
+    totalTutors: 0,
+    totalStudents: 0,
+    pendingVerifications: 0,
+    usersGrowthPercent: null,
+    tutorsGrowthPercent: null,
+    studentsGrowthPercent: null,
+  };
 
-  const filteredRegistrations = allRegistrations.filter((user) =>
-    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.subject.toLowerCase().includes(searchQuery.toLowerCase())
+  const monthlyData = (data?.monthlyRegistrations || []).map((item) => ({
+    label: item.label,
+    val: item.value,
+    active: item.label === currentMonthCode,
+  }));
+
+  const weeklyData = (data?.weeklyRegistrations || []).map((item) => ({
+    label: item.label,
+    val: item.value,
+    active: item.label === currentDayCode,
+  }));
+
+  const chartData = viewMode === "monthly" ? monthlyData : weeklyData;
+
+  const allRegistrations = data?.recentRegistrations || [];
+
+  const filteredRegistrations = allRegistrations.filter(
+    (user) =>
+      user.fullName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.email?.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
-  const visibleRegistrations = showAllRegistrations 
-    ? filteredRegistrations 
+  const visibleRegistrations = showAllRegistrations
+    ? filteredRegistrations
     : filteredRegistrations.slice(0, 3);
 
-  // Dynamic monthly registration values
-  const rawMonthlyData = [
-    { label: 'JAN', val: 40 },
-    { label: 'FEB', val: 65 },
-    { label: 'MAR', val: 50 },
-    { label: 'APR', val: 75 },
-    { label: 'MAY', val: 60 },
-    { label: 'JUN', val: 95 },
-    { label: 'JUL', val: 80 },
-    { label: 'AUG', val: 85 },
-    { label: 'SEP', val: 60 },
-    { label: 'OCT', val: 75 },
-    { label: 'NOV', val: 70 },
-    { label: 'DEC', val: 90 },
-  ];
-
-  // Dynamic weekly registration values (Mon -> Sun order)
-  const rawWeeklyData = [
-    { label: 'MON', val: 35 },
-    { label: 'TUE', val: 50 },
-    { label: 'WED', val: 65 },
-    { label: 'THU', val: 80 },
-    { label: 'FRI', val: 60 },
-    { label: 'SAT', val: 90 },
-    { label: 'SUN', val: 40 },
-  ];
-
-  // Mark current active status dynamically
-  const monthlyData = rawMonthlyData.map(item => ({
-    ...item,
-    active: item.label === currentMonthCode
+  const teachingModes = (data?.teachingModes || []).map((m) => ({
+    label: m.label,
+    val: `${m.percentage}%`,
   }));
 
-  const weeklyData = rawWeeklyData.map(item => ({
-    ...item,
-    active: item.label === currentDayCode
+  const courseCategories = (data?.courseCategories || []).map((c) => ({
+    label: c.label,
+    val: `${c.percentage}%`,
   }));
 
-  const chartData = viewMode === 'monthly' ? monthlyData : weeklyData;
+  // ---------- Growth badge ----------
+  const renderGrowthBadge = (pct) => {
+    if (pct === null || pct === undefined) {
+      return (
+        <span className="px-2 py-1 bg-gray-100 text-gray-500 text-[11px] font-semibold rounded-md">
+          —
+        </span>
+      );
+    }
+    const isPositive = pct >= 0;
+    return (
+      <span
+        className={`px-2 py-1 text-[11px] font-semibold rounded-md ${
+          isPositive ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"
+        }`}
+      >
+        {isPositive ? "+" : ""}
+        {pct}%
+      </span>
+    );
+  };
 
+  // ---------- Loading screen ----------
+  if (loading) {
+    return (
+      <div className="flex h-screen bg-[#F5F5F7] font-sans text-gray-900 overflow-hidden">
+        <Sidebar
+          onGenerateReport={() =>
+            setModalConfig({
+              isOpen: true,
+              type: "Report",
+              message: "Generating summary report...",
+            })
+          }
+        />
+        <main className="flex-1 flex flex-col items-center justify-center">
+          <div className="w-8 h-8 border-3 border-gray-300 border-t-black rounded-full animate-spin" />
+          <p className="text-xs text-gray-500 mt-4">Loading dashboard...</p>
+        </main>
+      </div>
+    );
+  }
+
+  // ---------- Error screen ----------
+  if (error) {
+    return (
+      <div className="flex h-screen bg-[#F5F5F7] font-sans text-gray-900 overflow-hidden">
+        <Sidebar
+          onGenerateReport={() =>
+            setModalConfig({
+              isOpen: true,
+              type: "Report",
+              message: "Generating summary report...",
+            })
+          }
+        />
+        <main className="flex-1 flex flex-col items-center justify-center px-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center border border-gray-100 shadow-xs">
+            <div className="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-3">
+              <svg
+                className="w-5 h-5 text-red-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+            </div>
+            <h3 className="text-sm font-bold text-gray-900 mb-1">
+              Couldn't load dashboard
+            </h3>
+            <p className="text-xs text-gray-500 mb-4">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full py-2.5 bg-black text-white font-semibold text-xs rounded-xl hover:bg-zinc-800 transition-colors cursor-pointer"
+            >
+              Retry
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // ---------- Main dashboard ----------
   return (
     <div className="flex h-screen bg-[#F5F5F7] font-sans text-gray-900 overflow-hidden">
-      
-      {/* SIDEBAR COMPONENT */}
-      <Sidebar onGenerateReport={() => setModalConfig({ isOpen: true, type: 'Report', message: 'Generating summary report...' })} />
+      <Sidebar
+        onGenerateReport={() =>
+          setModalConfig({
+            isOpen: true,
+            type: "Report",
+            message: "Generating summary report...",
+          })
+        }
+      />
 
-      {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col overflow-y-auto">
-        
-        <Navbar 
+        <Navbar
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           viewState={viewState}
@@ -111,113 +238,193 @@ const Dashboard = () => {
           placeholder="Search tutors or applications..."
         />
 
-        {viewState === 'notifications' ? (
+        {viewState === "notifications" ? (
           <NotificationsPage />
         ) : (
           <div className="p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8">
-            
-            {/* Dynamic Greeting Header */}
+            {/* Greeting */}
             <div>
               <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900">
                 {getGreeting()}, Admin.
               </h2>
-              <p className="text-xs text-gray-500 mt-1">Here's what's happening across the TUTR network today.</p>
+              <p className="text-xs text-gray-500 mt-1">
+                Here's what's happening across the TUTR network today.
+              </p>
             </div>
 
             {/* Stat Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
+              {/* Total Users */}
               <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between">
                 <div className="flex justify-between items-start">
                   <div className="p-2.5 bg-gray-100 rounded-xl">
-                    <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                    <svg
+                      className="w-5 h-5 text-gray-700"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                      />
+                    </svg>
                   </div>
-                  <span className="px-2 py-1 bg-green-50 text-green-600 text-[11px] font-semibold rounded-md">+12%</span>
+                  {renderGrowthBadge(stats.usersGrowthPercent)}
                 </div>
                 <div className="mt-5 sm:mt-6">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TOTAL USERS</p>
-                  <p className="text-2xl font-extrabold text-gray-900 mt-1">24,592</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                    TOTAL USERS
+                  </p>
+                  <p className="text-2xl font-extrabold text-gray-900 mt-1">
+                    {stats.totalUsers.toLocaleString()}
+                  </p>
                 </div>
               </div>
 
+              {/* Total Tutors */}
               <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between">
                 <div className="flex justify-between items-start">
                   <div className="p-2.5 bg-gray-100 rounded-xl">
-                    <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0112 20.055a11.952 11.952 0 01-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"/></svg>
+                    <svg
+                      className="w-5 h-5 text-gray-700"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M12 14l9-5-9-5-9 5 9 5z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0112 20.055a11.952 11.952 0 01-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"
+                      />
+                    </svg>
                   </div>
-                  <span className="px-2 py-1 bg-green-50 text-green-600 text-[11px] font-semibold rounded-md">+5%</span>
+                  {renderGrowthBadge(stats.tutorsGrowthPercent)}
                 </div>
                 <div className="mt-5 sm:mt-6">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TOTAL TUTORS</p>
-                  <p className="text-2xl font-extrabold text-gray-900 mt-1">1,204</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                    TOTAL TUTORS
+                  </p>
+                  <p className="text-2xl font-extrabold text-gray-900 mt-1">
+                    {stats.totalTutors.toLocaleString()}
+                  </p>
                 </div>
               </div>
 
+              {/* Total Students */}
               <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between">
                 <div className="flex justify-between items-start">
                   <div className="p-2.5 bg-gray-100 rounded-xl">
-                    <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                    <svg
+                      className="w-5 h-5 text-gray-700"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+                      />
+                    </svg>
                   </div>
-                  <span className="px-2 py-1 bg-green-50 text-green-600 text-[11px] font-semibold rounded-md">+18%</span>
+                  {renderGrowthBadge(stats.studentsGrowthPercent)}
                 </div>
                 <div className="mt-5 sm:mt-6">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">TOTAL STUDENTS</p>
-                  <p className="text-2xl font-extrabold text-gray-900 mt-1">23,388</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                    TOTAL STUDENTS
+                  </p>
+                  <p className="text-2xl font-extrabold text-gray-900 mt-1">
+                    {stats.totalStudents.toLocaleString()}
+                  </p>
                 </div>
               </div>
 
+              {/* Pending Verifications */}
               <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between">
                 <div className="flex justify-between items-start">
                   <div className="p-2.5 bg-red-50 text-red-500 rounded-xl">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                      />
+                    </svg>
                   </div>
-                  <span className="px-2.5 py-1 bg-red-50 text-red-500 text-[11px] font-semibold rounded-md">High Priority</span>
+                  <span className="px-2.5 py-1 bg-red-50 text-red-500 text-[11px] font-semibold rounded-md">
+                    High Priority
+                  </span>
                 </div>
                 <div className="mt-5 sm:mt-6">
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">PENDING VERIFICATIONS</p>
-                  <p className="text-2xl font-extrabold text-gray-900 mt-1">42</p>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                    PENDING VERIFICATIONS
+                  </p>
+                  <p className="text-2xl font-extrabold text-gray-900 mt-1">
+                    {stats.pendingVerifications.toLocaleString()}
+                  </p>
                 </div>
               </div>
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 sm:gap-8">
               <div className="xl:col-span-2 space-y-6 sm:space-y-8">
-                
-                {/* DYNAMIC REGISTRATIONS CHART */}
+                {/* Chart */}
                 <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="font-bold text-sm sm:text-base text-gray-900">
-                          {viewMode === 'monthly' ? 'Monthly Registrations' : 'Weekly Registrations'}
+                          {viewMode === "monthly"
+                            ? "Monthly Registrations"
+                            : "Weekly Registrations"}
                         </h3>
                         <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-bold rounded-full">
-                          {viewMode === 'monthly' ? `Current: ${currentMonthCode}` : `Today: ${currentDayCode}`}
+                          {viewMode === "monthly"
+                            ? `Current: ${currentMonthCode}`
+                            : `Today: ${currentDayCode}`}
                         </span>
                       </div>
                       <p className="text-[11px] sm:text-xs text-gray-400 mt-0.5">
-                        {viewMode === 'monthly' 
-                          ? 'Growth trends across the year' 
-                          : 'Growth trends across the current week'}
+                        {viewMode === "monthly"
+                          ? "Growth trends across the year"
+                          : "Growth trends across the current week"}
                       </p>
                     </div>
 
                     <div className="flex bg-gray-100 p-1 rounded-xl text-[10px] font-bold self-start sm:self-auto">
-                      <button 
-                        onClick={() => setViewMode('weekly')}
+                      <button
+                        onClick={() => setViewMode("weekly")}
                         className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                          viewMode === 'weekly' 
-                            ? 'bg-black text-white shadow-xs' 
-                            : 'text-gray-500 hover:text-black'
+                          viewMode === "weekly"
+                            ? "bg-black text-white shadow-xs"
+                            : "text-gray-500 hover:text-black"
                         }`}
                       >
                         WEEKLY
                       </button>
-                      <button 
-                        onClick={() => setViewMode('monthly')}
+                      <button
+                        onClick={() => setViewMode("monthly")}
                         className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                          viewMode === 'monthly' 
-                            ? 'bg-black text-white shadow-xs' 
-                            : 'text-gray-500 hover:text-black'
+                          viewMode === "monthly"
+                            ? "bg-black text-white shadow-xs"
+                            : "text-gray-500 hover:text-black"
                         }`}
                       >
                         MONTHLY
@@ -225,49 +432,75 @@ const Dashboard = () => {
                     </div>
                   </div>
 
-                  {/* Dynamic Interactive Chart Bars */}
                   <div className="overflow-x-auto no-scrollbar">
                     <div className="h-48 flex items-end justify-between pt-8 px-1 gap-1.5 sm:gap-3 border-b border-gray-100 pb-2 min-w-[320px]">
-                      {chartData.map((item, idx) => (
-                        <div key={idx} className="flex-1 flex flex-col items-center gap-2 h-full justify-end min-w-0 group relative">
-                          
-                          {/* Hover Tooltip Value */}
-                          <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-3 bg-black text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs pointer-events-none">
-                            {item.val}%
-                          </div>
+                      {chartData.map((item, idx) => {
+                        const maxVal = Math.max(
+                          ...chartData.map((d) => d.val),
+                          1,
+                        );
+                        const heightPct = (item.val / maxVal) * 100;
 
-                          <div 
-                            style={{ height: `${item.val}%` }} 
-                            className={`w-full max-w-[14px] sm:max-w-none rounded-t-sm sm:rounded-t-md transition-all duration-300 ${
-                              item.active 
-                                ? 'bg-black ring-2 ring-black/10' 
-                                : 'bg-gray-200 group-hover:bg-gray-300'
-                            }`}
-                          ></div>
-                          
-                          <span className={`text-[8px] sm:text-[10px] font-bold truncate w-full text-center ${
-                            item.active ? 'text-black font-extrabold' : 'text-gray-400'
-                          }`}>
-                            {item.label}
-                          </span>
-                        </div>
-                      ))}
+                        return (
+                          <div
+                            key={idx}
+                            className="flex-1 flex flex-col items-center gap-2 h-full justify-end min-w-0 group relative"
+                          >
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-3 bg-black text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs pointer-events-none">
+                              {item.val}
+                            </div>
+
+                            <div
+                              style={{ height: `${heightPct}%` }}
+                              className={`w-full max-w-[14px] sm:max-w-none rounded-t-sm sm:rounded-t-md transition-all duration-300 ${
+                                item.active
+                                  ? "bg-black ring-2 ring-black/10"
+                                  : "bg-gray-200 group-hover:bg-gray-300"
+                              }`}
+                            ></div>
+
+                            <span
+                              className={`text-[8px] sm:text-[10px] font-bold truncate w-full text-center ${
+                                item.active
+                                  ? "text-black font-extrabold"
+                                  : "text-gray-400"
+                              }`}
+                            >
+                              {item.label}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
 
-                {/* Recent Registrations Table Section */}
+                {/* Recent Registrations */}
                 <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-xs">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold text-sm sm:text-base text-gray-900">Recent Registrations</h3>
-                    
-                    <button 
-                      onClick={() => setShowAllRegistrations(!showAllRegistrations)}
+                    <h3 className="font-bold text-sm sm:text-base text-gray-900">
+                      Recent Registrations
+                    </h3>
+
+                    <button
+                      onClick={() =>
+                        setShowAllRegistrations(!showAllRegistrations)
+                      }
                       className="text-xs font-semibold text-black hover:underline flex items-center gap-1 cursor-pointer"
                     >
-                      {showAllRegistrations ? 'Show Less' : 'View All'}
-                      <svg className={`w-3.5 h-3.5 transition-transform ${showAllRegistrations ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/>
+                      {showAllRegistrations ? "Show Less" : "View All"}
+                      <svg
+                        className={`w-3.5 h-3.5 transition-transform ${showAllRegistrations ? "rotate-180" : ""}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M19 9l-7 7-7-7"
+                        />
                       </svg>
                     </button>
                   </div>
@@ -284,24 +517,41 @@ const Dashboard = () => {
                       <tbody className="divide-y divide-gray-50 text-xs">
                         {visibleRegistrations.length > 0 ? (
                           visibleRegistrations.map((user, idx) => (
-                            <tr key={idx} className="hover:bg-gray-50/50 transition-colors">
+                            <tr
+                              key={user.id || idx}
+                              className="hover:bg-gray-50/50 transition-colors"
+                            >
                               <td className="py-3.5 px-2 flex items-center gap-3">
                                 <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center font-bold text-xs shrink-0">
                                   {user.initials}
                                 </div>
                                 <div>
-                                  <p className="font-bold text-gray-900">{user.name}</p>
-                                  <p className="text-[10px] text-gray-400">{user.email}</p>
+                                  <p className="font-bold text-gray-900">
+                                    {user.fullName}
+                                  </p>
+                                  <p className="text-[10px] text-gray-400">
+                                    {user.email}
+                                  </p>
                                 </div>
                               </td>
-                              <td className="py-3.5 px-2 text-gray-600 font-medium">{user.role}</td>
+                              <td className="py-3.5 px-2 text-gray-600 font-medium">
+                                {user.role}
+                              </td>
                               <td className="py-3.5 px-2">
-                                <span className={`flex items-center gap-1.5 text-[10px] font-bold ${
-                                  user.status === 'PENDING' ? 'text-amber-500' : 'text-emerald-500'
-                                }`}>
-                                  <span className={`w-1.5 h-1.5 rounded-full ${
-                                    user.status === 'PENDING' ? 'bg-amber-500' : 'bg-emerald-500'
-                                  }`}></span>
+                                <span
+                                  className={`flex items-center gap-1.5 text-[10px] font-bold ${
+                                    user.status === "PENDING"
+                                      ? "text-amber-500"
+                                      : "text-emerald-500"
+                                  }`}
+                                >
+                                  <span
+                                    className={`w-1.5 h-1.5 rounded-full ${
+                                      user.status === "PENDING"
+                                        ? "bg-amber-500"
+                                        : "bg-emerald-500"
+                                    }`}
+                                  ></span>
                                   {user.status}
                                 </span>
                               </td>
@@ -309,7 +559,10 @@ const Dashboard = () => {
                           ))
                         ) : (
                           <tr>
-                            <td colSpan="3" className="py-4 text-center text-xs text-gray-400">
+                            <td
+                              colSpan="3"
+                              className="py-4 text-center text-xs text-gray-400"
+                            >
                               No records matching "{searchQuery}"
                             </td>
                           </tr>
@@ -318,96 +571,100 @@ const Dashboard = () => {
                     </table>
                   </div>
                 </div>
-
               </div>
 
-              {/* Right Column Progress Bars */}
+              {/* Right Column */}
               <div className="space-y-6 sm:space-y-8">
+                {/* Teaching Mode */}
                 <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-5">
-                  <h3 className="font-bold text-sm text-gray-900">Teaching Mode</h3>
-                  
-                  <div className="space-y-3">
-                    {[
-                      { 
-                        label: 'Online', 
-                        icon: (
-                          <svg className="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                          </svg>
-                        ) 
-                      },
-                      { 
-                        label: "Tutor's Home", 
-                        icon: (
-                          <svg className="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-                          </svg>
-                        ) 
-                      },
-                      { 
-                        label: "Student's Home", 
-                        icon: (
-                          <svg className="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0h4m-4 0v-4a1 1 0 011-1h2a1 1 0 011 1v4" />
-                          </svg>
-                        ) 
-                      },
-                    ].map((item, idx) => (
-                      <div key={idx} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
-                        <div className="p-2 bg-white rounded-lg border border-gray-200 shrink-0">
-                          {item.icon}
-                        </div>
-                        <span className="text-xs font-semibold text-gray-800">{item.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                  <h3 className="font-bold text-sm text-gray-900">
+                    Teaching Mode
+                  </h3>
 
-                <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-5">
-                  <h3 className="font-bold text-sm text-gray-900">Course Categories</h3>
-                  
                   <div className="space-y-4">
-                    {[
-                      { label: 'ENTRY TEST', val: '42%' },
-                      { label: 'INTERMEDIATE', val: '28%' },
-                      { label: 'MATRIC', val: '15%' },
-                      { label: 'O LEVEL', val: '15%' },
-                      { label: 'A LEVEL', val: '15%' },
-                    ].map((item, idx) => (
-                      <div key={idx}>
-                        <div className="flex justify-between text-[10px] font-bold text-gray-700 uppercase mb-1.5">
-                          <span>{item.label}</span>
-                          <span>{item.val}</span>
+                    {teachingModes.length > 0 ? (
+                      teachingModes.map((item, idx) => (
+                        <div key={idx}>
+                          <div className="flex justify-between text-[10px] font-bold text-gray-700 uppercase mb-1.5">
+                            <span>{item.label}</span>
+                            <span>{item.val}</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className="bg-black h-full"
+                              style={{ width: item.val }}
+                            ></div>
+                          </div>
                         </div>
-                        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="bg-black h-full" style={{ width: item.val }}></div>
-                        </div>
-                      </div>
-                    ))}
+                      ))
+                    ) : (
+                      <p className="text-xs text-gray-400">No data available</p>
+                    )}
                   </div>
                 </div>
 
+                {/* Course Categories */}
+                <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-5">
+                  <h3 className="font-bold text-sm text-gray-900">
+                    Course Categories
+                  </h3>
+
+                  <div className="space-y-4">
+                    {courseCategories.length > 0 ? (
+                      courseCategories.map((item, idx) => (
+                        <div key={idx}>
+                          <div className="flex justify-between text-[10px] font-bold text-gray-700 uppercase mb-1.5">
+                            <span>{item.label}</span>
+                            <span>{item.val}</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className="bg-black h-full"
+                              style={{ width: item.val }}
+                            ></div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-gray-400">No data available</p>
+                    )}
+                  </div>
+                </div>
               </div>
-
             </div>
-
           </div>
         )}
       </main>
 
-      {/* White Background Popup Modal */}
+      {/* Modal */}
       {modalConfig.isOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-gray-100 text-center">
             <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              <svg
+                className="w-5 h-5 text-gray-700"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
             </div>
-            <h3 className="font-bold text-sm text-gray-900 mb-1">{modalConfig.type}</h3>
-            <p className="text-xs text-gray-500 mb-5 leading-relaxed">{modalConfig.message}</p>
-            <button 
-              onClick={() => setModalConfig({ isOpen: false, type: '', message: '' })}
+            <h3 className="font-bold text-sm text-gray-900 mb-1">
+              {modalConfig.type}
+            </h3>
+            <p className="text-xs text-gray-500 mb-5 leading-relaxed">
+              {modalConfig.message}
+            </p>
+            <button
+              onClick={() =>
+                setModalConfig({ isOpen: false, type: "", message: "" })
+              }
               className="w-full py-2.5 bg-black text-white font-semibold text-xs rounded-xl hover:bg-zinc-800 transition-colors cursor-pointer"
             >
               OK
@@ -415,7 +672,6 @@ const Dashboard = () => {
           </div>
         </div>
       )}
-
     </div>
   );
 };
