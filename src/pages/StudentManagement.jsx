@@ -1,20 +1,141 @@
-import React, { useState, useEffect, useRef } from 'react';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import Sidebar from '../components/Sidebar';
-import Navbar from '../components/Navbar';
-import NotificationsPage from './NotificationsPage';
+import React, { useState, useEffect, useRef } from "react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import Sidebar from "../components/Sidebar";
+import Navbar from "../components/Navbar";
+import NotificationsPage from "./NotificationsPage";
+import { adminFetch, getImageUrl } from "../api/adminClient";
 
-// Helper function to determine status based on last active date (>30 days = Inactive)
-const computeStatus = (lastActiveDateStr) => {
-  const currentDate = new Date('2026-08-08');
-  const lastActiveDate = new Date(lastActiveDateStr);
-  const diffInDays = Math.floor((currentDate - lastActiveDate) / (1000 * 60 * 60 * 24));
-  
-  return diffInDays > 30 ? 'Inactive' : 'Active';
+// ============================================================
+// HELPERS — Enum & Format Mapping
+// ============================================================
+
+const formatCategory = (cat) => {
+  if (!cat) return "";
+  return cat
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 };
 
-// Custom Dropdown Component
+const formatMode = (mode) => {
+  if (!mode) return "";
+  return mode
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
+const formatPrice = (num) => {
+  if (num === null || num === undefined) return "—";
+  return `RS. ${Number(num).toLocaleString()}`;
+};
+
+const formatStudentId = (id) => `STU-${id}`;
+
+const getAvatarSrc = (url, name = "") => {
+  if (url) return url;
+  const initials = (name || "S T")
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(
+    initials,
+  )}&background=E5E7EB&color=374151&bold=true`;
+};
+
+// Filter mappers (Frontend label → Backend enum)
+const mapStatusFilter = (status) => {
+  if (status === "Active") return "ACTIVE";
+  if (status === "Suspended") return "SUSPENDED";
+  return null;
+};
+
+const mapCategoryFilter = (cat) => {
+  if (cat === "All Categories") return null;
+  return cat.replace(" ", "_").toUpperCase();
+};
+
+const mapModeFilter = (mode) => {
+  if (mode === "All Modes") return null;
+  return mode.replace(" ", "_").toUpperCase();
+};
+
+// ============================================================
+// MAPPERS — Backend DTO → Frontend shape
+// ============================================================
+
+const mapListStudent = (dto) => ({
+  id: formatStudentId(dto.id),
+  rawId: dto.id,
+  firstName: dto.firstName,
+  lastName: dto.lastName,
+  name: dto.name,
+  title: dto.title,
+  email: dto.email,
+  avatar: getImageUrl(dto.avatar),
+  status: dto.status,
+  coursesEnrolled: dto.coursesEnrolled,
+  enrolledCourseNames: dto.enrolledCourseNames || [],
+});
+
+const mapDetailStudent = (dto) => ({
+  id: formatStudentId(dto.id),
+  rawId: dto.id,
+  firstName: dto.firstName,
+  lastName: dto.lastName,
+  name: dto.name,
+  title: dto.title,
+  email: dto.email,
+  avatar: getImageUrl(dto.avatar),
+  gender: dto.gender,
+  dateOfBirth: dto.dateOfBirth,
+  phoneNumber: dto.phoneNumber,
+  location: dto.location,
+  school: dto.school,
+  college: dto.college,
+  education: dto.education,
+  status: dto.status,
+  totalCourses: dto.totalCourses,
+  activeTutors: dto.activeTutors,
+
+  enrolledCourses: (dto.enrolledCourses || []).map((c) => ({
+    courseId: c.courseId,
+    name: c.name,
+    category: formatCategory(c.category),
+    mode: formatMode(c.mode),
+    instructor: c.instructor,
+    basePrice: c.basePrice,
+    agreedPrice: c.agreedPrice,
+    hasBid: c.agreedPrice != null && c.agreedPrice < c.basePrice,
+  })),
+
+  favoriteCourses: (dto.favoriteCourses || []).map((c) => ({
+    courseId: c.courseId,
+    name: c.name,
+    category: formatCategory(c.category),
+    mode: formatMode(c.mode),
+    instructor: c.instructor,
+    basePrice: c.basePrice,
+  })),
+
+  deals: (dto.deals || []).map((d) => ({
+    connectionId: d.connectionId,
+    course: d.course,
+    category: formatCategory(d.category),
+    mode: formatMode(d.mode),
+    instructor: d.instructor,
+    basePrice: d.basePrice,
+    bidPrice: d.bidPrice,
+    status: d.status,
+  })),
+});
+
+// ============================================================
+// Custom Dropdown
+// ============================================================
 const CustomDropdown = ({ label, value, onChange, options }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -25,17 +146,17 @@ const CustomDropdown = ({ label, value, onChange, options }) => {
         setIsOpen(false);
       }
     };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   return (
     <div className="flex items-center gap-2 relative" ref={dropdownRef}>
-      {label && <span className="text-[10px] uppercase font-bold text-gray-400">{label}:</span>}
-      
+      {label && (
+        <span className="text-[10px] uppercase font-bold text-gray-400">
+          {label}:
+        </span>
+      )}
       <div className="relative">
         <button
           type="button"
@@ -47,7 +168,7 @@ const CustomDropdown = ({ label, value, onChange, options }) => {
         </button>
 
         {isOpen && (
-          <div className="absolute top-full left-0 mt-1 w-36 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden py-1 max-h-60 overflow-y-auto">
+          <div className="absolute top-full left-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden py-1 max-h-60 overflow-y-auto">
             {options.map((opt) => (
               <button
                 key={opt}
@@ -56,9 +177,9 @@ const CustomDropdown = ({ label, value, onChange, options }) => {
                   setIsOpen(false);
                 }}
                 className={`w-full text-left px-3 py-1.5 text-xs transition-colors cursor-pointer ${
-                  value === opt 
-                    ? 'bg-black text-white font-semibold' 
-                    : 'text-gray-700 hover:bg-black hover:text-white'
+                  value === opt
+                    ? "bg-black text-white font-semibold"
+                    : "text-gray-700 hover:bg-black hover:text-white"
                 }`}
               >
                 {opt}
@@ -71,268 +192,384 @@ const CustomDropdown = ({ label, value, onChange, options }) => {
   );
 };
 
+// ============================================================
+// MAIN COMPONENT
+// ============================================================
 const StudentManagement = () => {
-  // Navigation & View State
-  const [viewState, setViewState] = useState('dashboard');
+  const [viewState, setViewState] = useState("dashboard");
+  const [statusFilter, setStatusFilter] = useState("All Students");
+  const [categoryFilter, setCategoryFilter] = useState("All Categories");
+  const [modeFilter, setModeFilter] = useState("All Modes");
+  const [searchQuery, setSearchQuery] = useState("");
 
-  // Filter States
-  const [statusFilter, setStatusFilter] = useState('All Students');
-  const [categoryFilter, setCategoryFilter] = useState('All Subjects');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [students, setStudents] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Selected Student Drawer State & Modal Confirmation State
   const [selectedStudent, setSelectedStudent] = useState(null);
-  const [studentToBlock, setStudentToBlock] = useState(null);
+  const [studentDetail, setStudentDetail] = useState(null);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
 
-  // Initial Student Data with Course Pricing Breakdown
-  const [students, setStudents] = useState([
-    {
-      id: "STU-101",
-      name: "Sumaika Asif",
-      title: "BS Computer Science Student",
-      avatar: "https://randomuser.me/api/portraits/women/12.jpg",
-      enrolledCourses: [
-        { name: "Computer Science", basePrice: "RS. 15,000", agreedPrice: "RS. 12,000" },
-        { name: "Programming", basePrice: "RS. 18,000", agreedPrice: "RS. 14,500" },
-      ],
-      rating: 4.8,
-      coursesEnrolled: 4,
-      engagement: 92,
-      lastActiveDate: "2026-08-07",
-      totalCourses: 4,
-      completedCourses: 2,
-      activeTutors: 2,
-      reports: "0",
-    },
-    {
-      id: "STU-102",
-      name: "Hamza Ahmed",
-      title: "Intermediate Student",
-      avatar: "https://randomuser.me/api/portraits/men/14.jpg",
-      enrolledCourses: [
-        { name: "Mathematics", basePrice: "RS. 12,000", agreedPrice: "RS. 10,000" },
-        { name: "Calculus", basePrice: "RS. 14,000", agreedPrice: "RS. 11,500" },
-      ],
-      rating: 4.6,
-      coursesEnrolled: 3,
-      engagement: 87,
-      lastActiveDate: "2026-08-06",
-      totalCourses: 3,
-      completedCourses: 1,
-      activeTutors: 1,
-      reports: "1",
-    },
-    {
-      id: "STU-103",
-      name: "Areeba Khan",
-      title: "F.Sc. Pre-Engineering Student",
-      avatar: "https://randomuser.me/api/portraits/women/25.jpg",
-      enrolledCourses: [
-        { name: "Physics", basePrice: "RS. 16,000", agreedPrice: "RS. 13,000" },
-        { name: "Mathematics", basePrice: "RS. 15,000", agreedPrice: "RS. 12,500" },
-      ],
-      rating: 4.9,
-      coursesEnrolled: 5,
-      engagement: 95,
-      lastActiveDate: "2026-08-07",
-      totalCourses: 5,
-      completedCourses: 3,
-      activeTutors: 2,
-      reports: "0",
-    },
-    {
-      id: "STU-104",
-      name: "Muhammad Abdullah",
-      title: "IELTS Candidate",
-      avatar: "https://randomuser.me/api/portraits/men/22.jpg",
-      enrolledCourses: [
-        { name: "English", basePrice: "RS. 10,000", agreedPrice: "RS. 8,500" },
-        { name: "IELTS", basePrice: "RS. 25,000", agreedPrice: "RS. 20,000" },
-      ],
-      rating: 4.7,
-      coursesEnrolled: 2,
-      engagement: 84,
-      lastActiveDate: "2026-08-06",
-      totalCourses: 2,
-      completedCourses: 0,
-      activeTutors: 1,
-      reports: "0",
-    },
-    {
-      id: "STU-105",
-      name: "Mahnoor Fatima",
-      title: "Web Development Student",
-      avatar: "https://randomuser.me/api/portraits/women/32.jpg",
-      enrolledCourses: [
-        { name: "Web Development", basePrice: "RS. 20,000", agreedPrice: "RS. 17,000" },
-        { name: "JavaScript", basePrice: "RS. 15,000", agreedPrice: "RS. 12,000" },
-      ],
-      rating: 4.8,
-      coursesEnrolled: 3,
-      engagement: 90,
-      lastActiveDate: "2026-08-07",
-      totalCourses: 3,
-      completedCourses: 1,
-      activeTutors: 2,
-      reports: "0",
-    },
-    {
-      id: "STU-106",
-      name: "Ali Raza",
-      title: "M.Sc. Chemistry Student",
-      avatar: "https://randomuser.me/api/portraits/men/36.jpg",
-      enrolledCourses: [
-        { name: "Chemistry", basePrice: "RS. 14,000", agreedPrice: "RS. 11,000" },
-        { name: "Organic Chemistry", basePrice: "RS. 16,000", agreedPrice: "RS. 13,500" },
-      ],
-      rating: 4.5,
-      coursesEnrolled: 4,
-      engagement: 78,
-      lastActiveDate: "2026-06-15",
-      totalCourses: 4,
-      completedCourses: 2,
-      activeTutors: 1,
-      reports: "2",
-    },
-    {
-      id: "STU-107",
-      name: "Hira Shah",
-      title: "Economics Student",
-      avatar: "https://randomuser.me/api/portraits/women/41.jpg",
-      enrolledCourses: [
-        { name: "Economics", basePrice: "RS. 13,000", agreedPrice: "RS. 10,500" },
-        { name: "Accounting", basePrice: "RS. 15,000", agreedPrice: "RS. 12,000" },
-      ],
-      rating: 4.6,
-      coursesEnrolled: 3,
-      engagement: 81,
-      lastActiveDate: "2026-05-10",
-      totalCourses: 3,
-      completedCourses: 1,
-      activeTutors: 0,
-      reports: "1",
-    },
-    {
-      id: "STU-108",
-      name: "Usama Tariq",
-      title: "Biology Student",
-      avatar: "https://randomuser.me/api/portraits/men/42.jpg",
-      enrolledCourses: [
-        { name: "Biology", basePrice: "RS. 12,000", agreedPrice: "RS. 9,500" },
-        { name: "General Science", basePrice: "RS. 10,000", agreedPrice: "RS. 8,000" },
-      ],
-      rating: 4.8,
-      coursesEnrolled: 4,
-      engagement: 93,
-      lastActiveDate: "2026-08-07",
-      totalCourses: 4,
-      completedCourses: 2,
-      activeTutors: 2,
-      reports: "0",
-    },
-    {
-      id: "STU-109",
-      name: "Laiba Noor",
-      title: "Engineering Student",
-      avatar: "https://randomuser.me/api/portraits/women/52.jpg",
-      enrolledCourses: [
-        { name: "Engineering", basePrice: "RS. 22,000", agreedPrice: "RS. 18,500" },
-        { name: "Mathematics", basePrice: "RS. 15,000", agreedPrice: "RS. 12,000" },
-      ],
-      rating: 4.7,
-      coursesEnrolled: 5,
-      engagement: 88,
-      lastActiveDate: "2026-08-06",
-      totalCourses: 5,
-      completedCourses: 2,
-      activeTutors: 2,
-      reports: "0",
-    },
-    {
-      id: "STU-110",
-      name: "Ahmed Hassan",
-      title: "Psychology Student",
-      avatar: "https://randomuser.me/api/portraits/men/56.jpg",
-      enrolledCourses: [
-        { name: "Psychology", basePrice: "RS. 14,000", agreedPrice: "RS. 11,000" },
-        { name: "Social Science", basePrice: "RS. 11,000", agreedPrice: "RS. 9,000" },
-      ],
-      rating: 4.6,
-      coursesEnrolled: 2,
-      engagement: 80,
-      lastActiveDate: "2026-04-20",
-      totalCourses: 2,
-      completedCourses: 0,
-      activeTutors: 1,
-      reports: "0",
-    },
-  ]);
+  const [studentToSuspend, setStudentToSuspend] = useState(null);
 
-  // Handle Confirmed Blocking
-  const confirmBlockStudent = () => {
-    if (!studentToBlock) return;
-    setStudents((prev) => prev.filter((s) => s.id !== studentToBlock.id));
-    if (selectedStudent?.id === studentToBlock.id) {
-      setSelectedStudent(null);
+  // ============================================================
+  // FETCH STUDENTS LIST
+  // ============================================================
+  const fetchStudents = async () => {
+    setIsLoading(true);
+    try {
+      const payload = {
+        status: mapStatusFilter(statusFilter),
+        category: mapCategoryFilter(categoryFilter),
+        mode: mapModeFilter(modeFilter),
+        searchQuery: searchQuery.trim() || null,
+      };
+
+      const res = await adminFetch("/api/admin/students/filter", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error("Failed to fetch students");
+      const data = await res.json();
+      setStudents(data.map(mapListStudent));
+    } catch (err) {
+      console.error("Error fetching students:", err);
+      setStudents([]);
+    } finally {
+      setIsLoading(false);
     }
-    setStudentToBlock(null);
   };
 
-  // Filter Logic
-  const filteredStudents = students.filter((student) => {
-    const studentStatus = computeStatus(student.lastActiveDate);
-    const matchesStatus =
-      statusFilter === 'All Students' ? true : studentStatus === statusFilter;
+  useEffect(() => {
+    const t = setTimeout(fetchStudents, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, categoryFilter, modeFilter, searchQuery]);
 
-    const matchesCategory =
-      categoryFilter === 'All Subjects'
-        ? true
-        : student.enrolledCourses.some(
-            (c) => c.name.toLowerCase() === categoryFilter.toLowerCase()
-          );
+  // ============================================================
+  // FETCH STUDENT DETAILS
+  // ============================================================
+  const handleOpenStudent = async (student) => {
+    setSelectedStudent(student);
+    setStudentDetail(null);
+    setIsLoadingDetail(true);
+    try {
+      const res = await adminFetch(`/api/admin/students/${student.rawId}`);
+      if (!res.ok) throw new Error("Failed to fetch student details");
+      const dto = await res.json();
+      setStudentDetail(mapDetailStudent(dto));
+    } catch (err) {
+      console.error("Error fetching student details:", err);
+      setStudentDetail({
+        ...student,
+        enrolledCourses: [],
+        favoriteCourses: [],
+        deals: [],
+        totalCourses: student.coursesEnrolled,
+        activeTutors: 0,
+      });
+    } finally {
+      setIsLoadingDetail(false);
+    }
+  };
 
-    const matchesSearch =
-      student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.enrolledCourses.some((c) =>
-        c.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const handleCloseStudent = () => {
+    setSelectedStudent(null);
+    setStudentDetail(null);
+  };
+
+  // ============================================================
+  // SUSPEND / REACTIVATE STUDENT
+  // ============================================================
+  const confirmStatusChange = async () => {
+    if (!studentToSuspend) return;
+
+    const isSuspend = studentToSuspend.status === "Active";
+    const endpoint = isSuspend ? "suspend" : "reactivate";
+
+    try {
+      const res = await adminFetch(
+        `/api/admin/students/${studentToSuspend.rawId}/${endpoint}`,
+        { method: "PUT" },
       );
+      if (!res.ok) throw new Error(`${endpoint} failed`);
 
-    return matchesStatus && matchesCategory && matchesSearch;
-  });
+      await fetchStudents();
+      handleCloseStudent();
+    } catch (err) {
+      console.error(`${endpoint} error:`, err);
+    } finally {
+      setStudentToSuspend(null);
+    }
+  };
 
-  // Export Data PDF
+  // ============================================================
+  // PDF EXPORT — List of Students
+  // ============================================================
   const handleExportPDF = () => {
     const doc = new jsPDF();
     doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text('TUTR - Student Management Report', 14, 15);
+    doc.setFont("helvetica", "bold");
+    doc.text("TUTR - Student Management Report", 14, 15);
 
     doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Status Filter: ${statusFilter} | Category: ${categoryFilter} | Date: ${new Date().toLocaleDateString()} | Time: ${new Date().toLocaleTimeString()}`, 14, 22);
+    doc.setFont("helvetica", "normal");
+    doc.text(
+      `Status: ${statusFilter} | Category: ${categoryFilter} | Mode: ${modeFilter} | Date: ${new Date().toLocaleDateString()}`,
+      14,
+      22,
+    );
 
     const tableHeaders = [
-      ['ID', 'Name', 'Status', 'Enrolled Courses'],
+      ["ID", "Name", "Email", "Status", "Enrolled Courses"],
     ];
-    const tableRows = filteredStudents.map((s) => [
+    const tableRows = students.map((s) => [
       s.id,
       s.name,
-      computeStatus(s.lastActiveDate),
-      `${s.coursesEnrolled} Courses (${s.enrolledCourses.map((c) => c.name).join(', ')})`,
+      s.email,
+      s.status,
+      `${s.coursesEnrolled} Courses (${s.enrolledCourseNames.join(", ")})`,
     ]);
 
     autoTable(doc, {
       startY: 28,
       head: tableHeaders,
       body: tableRows,
-      theme: 'grid',
+      theme: "grid",
       headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] },
     });
 
     doc.save(`Student_Report_${statusFilter}_${categoryFilter}.pdf`);
   };
 
+  // ============================================================
+  // PDF EXPORT — Individual Student
+  // ============================================================
+  const handleExportIndividualPDF = () => {
+    if (!studentDetail) return;
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 14;
+    let y = 15;
+
+    // ---- Header ----
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text("TUTR - Student Profile", margin, y);
+    y += 6;
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(120, 120, 120);
+    doc.text(
+      `Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`,
+      margin,
+      y,
+    );
+    doc.setTextColor(0, 0, 0);
+    y += 10;
+
+    // ---- Identity ----
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text(studentDetail.name || "—", margin, y);
+    y += 5;
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100, 100, 100);
+    doc.text(
+      `${studentDetail.title || ""}  •  ${studentDetail.id || ""}`,
+      margin,
+      y,
+    );
+    doc.setTextColor(0, 0, 0);
+    y += 8;
+
+    // ---- Status Banner ----
+    const isActive = studentDetail.status === "Active";
+    doc.setFillColor(
+      isActive ? 220 : 254,
+      isActive ? 252 : 226,
+      isActive ? 231 : 226,
+    );
+    doc.roundedRect(margin, y, pageWidth - margin * 2, 10, 2, 2, "F");
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(
+      isActive ? 22 : 185,
+      isActive ? 163 : 28,
+      isActive ? 74 : 28,
+    );
+    doc.text(
+      `Account Status:  ${studentDetail.status || "—"}`,
+      margin + 4,
+      y + 6.5,
+    );
+    doc.setTextColor(0, 0, 0);
+    y += 16;
+
+    // ---- Personal Information Table ----
+    const personalRows = [
+      ["First Name", studentDetail.firstName || "—"],
+      ["Last Name", studentDetail.lastName || "—"],
+      ["Email", studentDetail.email || "—"],
+      ["Phone", studentDetail.phoneNumber || "—"],
+      ["Gender", studentDetail.gender || "—"],
+      ["Date of Birth", studentDetail.dateOfBirth || "—"],
+      ["Location", studentDetail.location || "—"],
+      ["School", studentDetail.school || "—"],
+      ["College", studentDetail.college || "—"],
+    ];
+
+    autoTable(doc, {
+      startY: y,
+      head: [["Personal Information", ""]],
+      body: personalRows,
+      theme: "grid",
+      headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] },
+      columnStyles: {
+        0: { cellWidth: 50, fontStyle: "bold" },
+        1: { cellWidth: pageWidth - margin * 2 - 50 },
+      },
+      margin: { left: margin, right: margin },
+    });
+    y = doc.lastAutoTable.finalY + 8;
+
+    // ---- Summary Stats ----
+    autoTable(doc, {
+      startY: y,
+      head: [["Total Courses", "Active Tutors"]],
+      body: [
+        [
+          String(studentDetail.totalCourses ?? 0),
+          String(studentDetail.activeTutors ?? 0),
+        ],
+      ],
+      theme: "grid",
+      headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] },
+      margin: { left: margin, right: margin },
+    });
+    y = doc.lastAutoTable.finalY + 8;
+
+    // ---- Enrolled Courses ----
+    if (
+      studentDetail.enrolledCourses &&
+      studentDetail.enrolledCourses.length > 0
+    ) {
+      autoTable(doc, {
+        startY: y,
+        head: [
+          [
+            "Enrolled Courses",
+            "Category",
+            "Mode",
+            "Instructor",
+            "Base Price",
+            "Paid",
+          ],
+        ],
+        body: studentDetail.enrolledCourses.map((c) => [
+          c.name || "—",
+          c.category || "—",
+          c.mode || "—",
+          c.instructor || "—",
+          formatPrice(c.basePrice),
+          c.hasBid ? formatPrice(c.agreedPrice) : formatPrice(c.basePrice),
+        ]),
+        theme: "grid",
+        headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] },
+        styles: { fontSize: 8 },
+        margin: { left: margin, right: margin },
+      });
+      y = doc.lastAutoTable.finalY + 8;
+    }
+
+    // ---- Favorite Courses ----
+    if (
+      studentDetail.favoriteCourses &&
+      studentDetail.favoriteCourses.length > 0
+    ) {
+      autoTable(doc, {
+        startY: y,
+        head: [["Favorite Courses", "Category", "Mode", "Instructor", "Price"]],
+        body: studentDetail.favoriteCourses.map((c) => [
+          c.name || "—",
+          c.category || "—",
+          c.mode || "—",
+          c.instructor || "—",
+          formatPrice(c.basePrice),
+        ]),
+        theme: "grid",
+        headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] },
+        styles: { fontSize: 8 },
+        margin: { left: margin, right: margin },
+      });
+      y = doc.lastAutoTable.finalY + 8;
+    }
+
+    // ---- Deals ----
+    if (studentDetail.deals && studentDetail.deals.length > 0) {
+      autoTable(doc, {
+        startY: y,
+        head: [
+          [
+            "Deals",
+            "Category",
+            "Mode",
+            "Instructor",
+            "Base Price",
+            "Bid Price",
+            "Status",
+          ],
+        ],
+        body: studentDetail.deals.map((d) => [
+          d.course || "—",
+          d.category || "—",
+          d.mode || "—",
+          d.instructor || "—",
+          formatPrice(d.basePrice),
+          formatPrice(d.bidPrice),
+          d.status || "—",
+        ]),
+        theme: "grid",
+        headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] },
+        styles: { fontSize: 8 },
+        margin: { left: margin, right: margin },
+      });
+      y = doc.lastAutoTable.finalY + 8;
+    } else {
+      // Show an empty-state line so the section is still visible
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "italic");
+      doc.setTextColor(150, 150, 150);
+      doc.text("Deals: none active", margin, y);
+      doc.setTextColor(0, 0, 0);
+      y += 6;
+    }
+
+    // ---- Footer ----
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(150, 150, 150);
+      doc.text(
+        `TUTR Admin Console  •  Page ${i} of ${pageCount}`,
+        pageWidth / 2,
+        doc.internal.pageSize.getHeight() - 8,
+        { align: "center" },
+      );
+    }
+
+    const safeName = (studentDetail.name || "Student").replace(/\s+/g, "_");
+    doc.save(`Student_${safeName}_${studentDetail.id}.pdf`);
+  };
+
+  // ============================================================
+  // RENDER
+  // ============================================================
   return (
     <div className="flex h-screen bg-[#F8F9FB] font-sans text-gray-900 overflow-hidden relative">
       <Sidebar onGenerateReport={handleExportPDF} />
@@ -345,8 +582,8 @@ const StudentManagement = () => {
           setSearchQuery={setSearchQuery}
         />
 
-        {viewState === 'notifications' ? (
-          <NotificationsPage onBack={() => setViewState('dashboard')} />
+        {viewState === "notifications" ? (
+          <NotificationsPage onBack={() => setViewState("dashboard")} />
         ) : (
           <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto w-full space-y-6">
             <div className="flex items-center justify-between">
@@ -379,46 +616,43 @@ const StudentManagement = () => {
               </button>
             </div>
 
-            {/* Filters Bar */}
-            <div className="bg-white p-3 rounded-2xl border border-gray-100 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 text-xs">
-              <div className="flex flex-wrap items-center gap-3 sm:gap-4 w-full sm:w-auto">
+            {/* Filters */}
+            <div className="bg-white p-3.5 rounded-2xl border border-gray-100 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 text-xs">
+              <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 w-full lg:w-auto">
                 <CustomDropdown
                   label="STATUS"
                   value={statusFilter}
                   onChange={setStatusFilter}
-                  options={['All Students', 'Active', 'Inactive']}
+                  options={["All Students", "Active", "Suspended"]}
                 />
-
                 <CustomDropdown
                   label="CATEGORY"
                   value={categoryFilter}
                   onChange={setCategoryFilter}
                   options={[
-                    'All Subjects',
-                    'Computer Science',
-                    'Programming',
-                    'Mathematics',
-                    'Calculus',
-                    'Physics',
-                    'English',
-                    'IELTS',
-                    'Web Development',
-                    'JavaScript',
-                    'Chemistry',
-                    'Organic Chemistry',
-                    'Economics',
-                    'Accounting',
-                    'Biology',
-                    'General Science',
-                    'Engineering',
-                    'Psychology',
-                    'Social Science',
+                    "All Categories",
+                    "O Level",
+                    "A Level",
+                    "Entry Test",
+                    "Matric",
+                    "Intermediate",
+                  ]}
+                />
+                <CustomDropdown
+                  label="MODE"
+                  value={modeFilter}
+                  onChange={setModeFilter}
+                  options={[
+                    "All Modes",
+                    "Online",
+                    "Student Home",
+                    "Tutor Home",
                   ]}
                 />
               </div>
 
-              <div className="text-gray-400 text-xs font-medium shrink-0">
-                Showing {filteredStudents.length} of {students.length} students
+              <div className="text-gray-400 text-xs font-medium shrink-0 self-end lg:self-auto">
+                Showing {students.length} students
               </div>
             </div>
 
@@ -434,75 +668,84 @@ const StudentManagement = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filteredStudents.length > 0 ? (
-                    filteredStudents.map((student) => {
-                      const currentStatus = computeStatus(student.lastActiveDate);
-                      return (
-                        <tr
-                          key={student.id}
-                          className={`hover:bg-gray-50/50 transition-colors cursor-pointer ${
-                            selectedStudent?.id === student.id
-                              ? 'bg-gray-50/80'
-                              : ''
-                          }`}
-                          onClick={() => setSelectedStudent(student)}
-                        >
-                          <td className="py-4 px-6">
-                            <div className="flex items-center gap-3">
-                              <img
-                                src={student.avatar}
-                                alt={student.name}
-                                className="w-9 h-9 rounded-lg object-cover"
-                              />
-                              <div>
-                                <p className="font-bold text-gray-900 text-xs hover:underline">
-                                  {student.name}
-                                </p>
-                                <p className="text-[10px] text-gray-400">
-                                  {student.title}
-                                </p>
-                              </div>
+                  {isLoading ? (
+                    <tr>
+                      <td
+                        colSpan="4"
+                        className="py-8 text-center text-gray-400 text-xs font-medium"
+                      >
+                        Loading students...
+                      </td>
+                    </tr>
+                  ) : students.length > 0 ? (
+                    students.map((student) => (
+                      <tr
+                        key={student.id}
+                        className={`hover:bg-gray-50/50 transition-colors cursor-pointer ${
+                          selectedStudent?.id === student.id
+                            ? "bg-gray-50/80"
+                            : ""
+                        }`}
+                        onClick={() => handleOpenStudent(student)}
+                      >
+                        <td className="py-4 px-6">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={getAvatarSrc(student.avatar, student.name)}
+                              alt={student.name}
+                              className="w-9 h-9 rounded-lg object-cover"
+                            />
+                            <div>
+                              <p className="font-bold text-gray-900 text-xs hover:underline">
+                                {student.name}
+                              </p>
+                              <p className="text-[10px] text-gray-400">
+                                {student.title}
+                              </p>
                             </div>
-                          </td>
-                          <td className="py-4 px-6">
-                            <span
-                              className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                                currentStatus === 'Active'
-                                  ? 'bg-green-100 text-green-700'
-                                  : 'bg-red-100 text-red-700'
-                              }`}
-                            >
-                              {currentStatus}
+                          </div>
+                        </td>
+                        <td className="py-4 px-6">
+                          <span
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                              student.status === "Active"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-red-100 text-red-700"
+                            }`}
+                          >
+                            {student.status}
+                          </span>
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-gray-900 mr-1">
+                              {student.coursesEnrolled} Courses:
                             </span>
-                          </td>
-                          <td className="py-4 px-6">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-bold text-gray-900 mr-1">
-                                {student.coursesEnrolled} Courses:
-                              </span>
-                              {student.enrolledCourses.map((c, idx) => (
-                                <span
-                                  key={idx}
-                                  className="bg-gray-100 text-gray-500 font-bold px-2 py-0.5 rounded text-[9px] tracking-wide"
-                                >
-                                  {c.name}
-                                </span>
-                              ))}
-                            </div>
-                          </td>
-                          <td className="py-4 px-6 text-right">
-                            <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                              <button
-                                onClick={() => setSelectedStudent(student)}
-                                className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded-lg text-[11px] transition-colors cursor-pointer"
+                            {student.enrolledCourseNames.map((name, idx) => (
+                              <span
+                                key={idx}
+                                className="bg-gray-100 text-gray-500 font-bold px-2 py-0.5 rounded text-[9px] tracking-wide"
                               >
-                                View
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
+                                {name}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="py-4 px-6 text-right">
+                          <div
+                            className="flex items-center justify-end gap-2"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              onClick={() => handleOpenStudent(student)}
+                              className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded-lg text-[11px] transition-colors cursor-pointer"
+                            >
+                              View
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
                   ) : (
                     <tr>
                       <td
@@ -520,7 +763,7 @@ const StudentManagement = () => {
         )}
       </main>
 
-      {/* Slide-over Right Drawer */}
+      {/* Student Details Drawer */}
       {selectedStudent && (
         <aside className="w-full sm:w-96 bg-white border-l border-gray-200 h-screen overflow-y-auto flex flex-col justify-between p-6 pt-16 sm:pt-6 shadow-xl z-20 fixed sm:sticky top-0 right-0">
           <div className="space-y-6">
@@ -529,128 +772,436 @@ const StudentManagement = () => {
                 Student Details
               </h3>
               <button
-                onClick={() => setSelectedStudent(null)}
+                onClick={handleCloseStudent}
                 className="text-gray-400 hover:text-black cursor-pointer text-sm p-1"
               >
                 ✕
               </button>
             </div>
 
-            <div className="text-center space-y-2">
-              <img
-                src={selectedStudent.avatar}
-                alt={selectedStudent.name}
-                className="w-20 h-20 rounded-2xl object-cover mx-auto"
-              />
-              <div>
-                <h4 className="font-bold text-gray-900 text-base">
-                  {selectedStudent.name}
-                </h4>
-                <p className="text-xs text-gray-400">{selectedStudent.title}</p>
+            {isLoadingDetail ? (
+              <div className="py-12 text-center text-gray-400 text-xs font-medium">
+                Loading details...
               </div>
-            </div>
+            ) : studentDetail ? (
+              <>
+                <div className="text-center space-y-2">
+                  <img
+                    src={getAvatarSrc(studentDetail.avatar, studentDetail.name)}
+                    alt={studentDetail.name}
+                    className="w-20 h-20 rounded-2xl object-cover mx-auto"
+                  />
+                  <div>
+                    <h4 className="font-bold text-gray-900 text-base">
+                      {studentDetail.name}
+                    </h4>
+                    <p className="text-xs text-gray-400">
+                      {studentDetail.title}
+                    </p>
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-3 gap-2 text-left">
-              <div className="bg-gray-50/80 p-2.5 rounded-xl border border-gray-100">
-                <span className="text-[8px] font-bold uppercase text-gray-400 block tracking-wider">
-                  TOTAL COURSES
-                </span>
-                <span className="text-base font-bold text-gray-900">
-                  {selectedStudent.totalCourses}
-                </span>
-              </div>
-              <div className="bg-gray-50/80 p-2.5 rounded-xl border border-gray-100">
-                <span className="text-[8px] font-bold uppercase text-gray-400 block tracking-wider">
-                  ACTIVE TUTORS
-                </span>
-                <span className="text-base font-bold text-gray-900">
-                  {selectedStudent.activeTutors}
-                </span>
-              </div>
-              <div className="bg-gray-50/80 p-2.5 rounded-xl border border-gray-100">
-                <span className="text-[8px] font-bold uppercase text-gray-400 block tracking-wider">
-                  REPORTS
-                </span>
-                <span className="text-base font-bold text-gray-900">
-                  {selectedStudent.reports}
-                </span>
-              </div>
-            </div>
+                {/* Email */}
+                <div className="space-y-2">
+                  <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                    Email
+                  </h5>
+                  <div className="bg-gray-50/80 border border-gray-100 rounded-xl p-3 space-y-2">
+                    <p className="text-[11px] font-semibold text-gray-900 break-all">
+                      {studentDetail.email}
+                    </p>
+                    <a
+                      href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(
+                        studentDetail.email,
+                      )}&su=${encodeURIComponent(
+                        `TUTR - Message for ${studentDetail.name}`,
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block w-full text-center px-3 py-1.5 bg-black text-white text-[11px] font-bold rounded-lg hover:bg-zinc-800 transition-colors"
+                    >
+                      Email Student
+                    </a>
+                  </div>
+                </div>
 
-            {/* Enrolled Courses Section with Pricing Breakdown */}
-            <div className="space-y-3">
-              <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
-                ENROLLED COURSES 
-              </h5>
-              <div className="space-y-2">
-                {selectedStudent.enrolledCourses.map((course, index) => (
-                  <div 
-                    key={index} 
-                    className="flex items-center justify-between p-3 bg-gray-50/80 border border-gray-100 rounded-xl"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-2 h-2 rounded-full bg-black" />
-                      <span className="text-xs font-bold text-gray-900">
-                        {course.name}
-                      </span>
+                {/* Personal Information */}
+                <div className="space-y-3">
+                  <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                    Personal Information
+                  </h5>
+                  <div className="grid grid-cols-2 gap-2">
+                    <DetailField
+                      label="First Name"
+                      value={studentDetail.firstName}
+                    />
+                    <DetailField
+                      label="Last Name"
+                      value={studentDetail.lastName}
+                    />
+                    <DetailField label="Gender" value={studentDetail.gender} />
+                    <DetailField
+                      label="Date of Birth"
+                      value={studentDetail.dateOfBirth}
+                    />
+                    <DetailField
+                      label="Phone"
+                      value={studentDetail.phoneNumber}
+                    />
+                    <DetailField
+                      label="Location"
+                      value={studentDetail.location}
+                    />
+                  </div>
+                </div>
+
+                {/* Education */}
+                <div className="space-y-3">
+                  <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                    Education
+                  </h5>
+                  <div className="bg-gray-50/80 border border-gray-100 rounded-xl p-3 space-y-2">
+                    <div>
+                      <p className="text-[8px] font-bold uppercase text-gray-400 tracking-wider">
+                        School
+                      </p>
+                      <p className="text-[11px] font-semibold text-gray-900">
+                        {studentDetail.school || "—"}
+                      </p>
                     </div>
-
-                    {/* Dual Price Display */}
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-medium text-gray-400 line-through">
-                        {course.basePrice}
-                      </span>
-                      <span className="text-xs font-bold text-gray-900">
-                        {course.agreedPrice}
-                      </span>
+                    <div className="border-t border-gray-100 pt-2">
+                      <p className="text-[8px] font-bold uppercase text-gray-400 tracking-wider">
+                        College
+                      </p>
+                      <p className="text-[11px] font-semibold text-gray-900">
+                        {studentDetail.college || "—"}
+                      </p>
                     </div>
                   </div>
-                ))}
+                </div>
+
+                {/* Stats */}
+                <div className="grid grid-cols-2 gap-2 text-left">
+                  <div className="bg-gray-50/80 p-2.5 rounded-xl border border-gray-100">
+                    <span className="text-[8px] font-bold uppercase text-gray-400 block tracking-wider">
+                      TOTAL COURSES
+                    </span>
+                    <span className="text-base font-bold text-gray-900">
+                      {studentDetail.totalCourses}
+                    </span>
+                  </div>
+                  <div className="bg-gray-50/80 p-2.5 rounded-xl border border-gray-100">
+                    <span className="text-[8px] font-bold uppercase text-gray-400 block tracking-wider">
+                      ACTIVE TUTORS
+                    </span>
+                    <span className="text-base font-bold text-gray-900">
+                      {studentDetail.activeTutors}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Enrolled Courses */}
+                <div className="space-y-3">
+                  <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                    Enrolled Courses
+                  </h5>
+                  {studentDetail.enrolledCourses.length > 0 ? (
+                    <div className="space-y-2">
+                      {studentDetail.enrolledCourses.map((course, index) => (
+                        <CourseCard key={index} course={course} />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-gray-400 italic">
+                      No enrolled courses.
+                    </p>
+                  )}
+                </div>
+
+                {/* Favorite Courses */}
+                <div className="space-y-3">
+                  <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                    Favorite Courses
+                  </h5>
+                  {studentDetail.favoriteCourses &&
+                  studentDetail.favoriteCourses.length > 0 ? (
+                    <div className="space-y-2">
+                      {studentDetail.favoriteCourses.map((course, index) => (
+                        <CourseCard key={index} course={course} favorite />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-gray-400 italic">
+                      No favorite courses yet.
+                    </p>
+                  )}
+                </div>
+
+                {/* Deals */}
+                <div className="space-y-3">
+                  <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+                    Deals
+                  </h5>
+                  {studentDetail.deals && studentDetail.deals.length > 0 ? (
+                    <div className="space-y-2">
+                      {studentDetail.deals.map((deal, index) => (
+                        <DealCard key={index} deal={deal} />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-gray-400 italic">
+                      No active deals.
+                    </p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="py-12 text-center text-gray-400 text-xs font-medium">
+                No details available.
               </div>
-            </div>
+            )}
           </div>
 
           <div className="pt-6 border-t border-gray-100 space-y-2">
-            <button className="w-full py-2.5 bg-black text-white text-xs font-bold rounded-xl hover:bg-zinc-800 transition-colors cursor-pointer">
-              Send Direct Message
-            </button>
+            {/* Export Individual PDF */}
             <button
-              onClick={() => setStudentToBlock(selectedStudent)}
-              className="w-full py-2.5 border border-red-300 text-red-600 text-xs font-bold rounded-xl hover:bg-red-50 transition-colors cursor-pointer"
+              onClick={handleExportIndividualPDF}
+              disabled={!studentDetail || isLoadingDetail}
+              className="w-full py-2.5 bg-black text-white text-xs font-bold rounded-xl hover:bg-zinc-800 transition-colors cursor-pointer flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              BLOCK STUDENT
+              <svg
+                className="w-3.5 h-3.5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                />
+              </svg>
+              Export Student PDF
             </button>
+
+            {selectedStudent?.status === "Suspended" ? (
+              <button
+                onClick={() => setStudentToSuspend(selectedStudent)}
+                className="w-full py-2.5 border border-green-300 text-green-700 text-xs font-bold rounded-xl hover:bg-green-50 transition-colors cursor-pointer"
+              >
+                REACTIVATE STUDENT
+              </button>
+            ) : (
+              <button
+                onClick={() => setStudentToSuspend(selectedStudent)}
+                className="w-full py-2.5 border border-red-300 text-red-600 text-xs font-bold rounded-xl hover:bg-red-50 transition-colors cursor-pointer"
+              >
+                SUSPEND STUDENT
+              </button>
+            )}
           </div>
         </aside>
       )}
 
-      {/* Block Confirmation Modal Overlay */}
-      {studentToBlock && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full border border-gray-100 shadow-xl space-y-4">
-            <div>
-              <h4 className="text-base font-bold text-gray-900">Block Student</h4>
-              <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                Are you sure you want to block <span className="font-semibold text-gray-900">{studentToBlock.name}</span>? They will no longer be able to access platforms or active sessions.
-              </p>
+      {/* Suspend / Reactivate Confirmation Modal */}
+      {studentToSuspend &&
+        (() => {
+          const isSuspend = studentToSuspend.status === "Active";
+          return (
+            <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl p-6 max-w-sm w-full border border-gray-100 shadow-xl space-y-4">
+                <div>
+                  <h4 className="text-base font-bold text-gray-900">
+                    {isSuspend ? "Suspend Student" : "Reactivate Student"}
+                  </h4>
+                  <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                    {isSuspend ? (
+                      <>
+                        Are you sure you want to suspend{" "}
+                        <span className="font-semibold text-gray-900">
+                          {studentToSuspend.name}
+                        </span>
+                        ? Their account will be temporarily disabled, and they
+                        will lose access to active sessions until reactivated.
+                      </>
+                    ) : (
+                      <>
+                        Are you sure you want to reactivate{" "}
+                        <span className="font-semibold text-gray-900">
+                          {studentToSuspend.name}
+                        </span>
+                        ? Their account will regain full access to TUTR
+                        immediately.
+                      </>
+                    )}
+                  </p>
+                </div>
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    onClick={() => setStudentToSuspend(null)}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmStatusChange}
+                    className={`px-4 py-2 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                      isSuspend
+                        ? "bg-red-600 hover:bg-red-700"
+                        : "bg-green-600 hover:bg-green-700"
+                    }`}
+                  >
+                    {isSuspend ? "Confirm Suspend" : "Confirm Reactivate"}
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                onClick={() => setStudentToBlock(null)}
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmBlockStudent}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
-              >
-                Confirm Block
-              </button>
-            </div>
-          </div>
-        </div>
+          );
+        })()}
+    </div>
+  );
+};
+
+// ============================================================
+// Small helpers
+// ============================================================
+const DetailField = ({ label, value }) => (
+  <div className="bg-gray-50/80 border border-gray-100 rounded-xl px-3 py-2">
+    <p className="text-[8px] font-bold uppercase text-gray-400 tracking-wider mb-0.5">
+      {label}
+    </p>
+    <p className="text-[11px] font-semibold text-gray-900 truncate">
+      {value || "—"}
+    </p>
+  </div>
+);
+
+// ============================================================
+// CourseCard — Enrolled + Favorite
+// ============================================================
+const CourseCard = ({ course, favorite = false }) => (
+  <div className="bg-gray-50/80 border border-gray-100 rounded-xl p-3 space-y-2">
+    <div className="flex items-start justify-between gap-2">
+      <p className="text-xs font-bold text-gray-900 leading-snug">
+        {course.name}
+      </p>
+      {favorite && (
+        <svg
+          className="w-3.5 h-3.5 text-amber-500 shrink-0"
+          fill="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
+        </svg>
       )}
+    </div>
+
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-[9px] bg-gray-200 text-gray-700 font-bold px-1.5 py-0.5 rounded uppercase tracking-wide">
+        {course.category}
+      </span>
+      <span className="text-[9px] bg-gray-100 text-gray-600 font-bold px-1.5 py-0.5 rounded uppercase tracking-wide">
+        {course.mode}
+      </span>
+    </div>
+
+    <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
+      <svg
+        className="w-3 h-3"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="2"
+          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+        />
+      </svg>
+      <span className="font-medium">{course.instructor}</span>
+    </div>
+
+    <div className="flex items-center justify-end gap-2 pt-1 border-t border-gray-100">
+      {favorite ? (
+        <span className="text-[11px] font-bold text-gray-900">
+          {formatPrice(course.basePrice)}
+        </span>
+      ) : course.hasBid ? (
+        <>
+          <span className="text-[10px] font-medium text-gray-400 line-through">
+            {formatPrice(course.basePrice)}
+          </span>
+          <span className="text-[11px] font-bold text-gray-900">
+            {formatPrice(course.agreedPrice)}
+          </span>
+        </>
+      ) : (
+        <span className="text-[11px] font-bold text-gray-900">
+          {formatPrice(course.basePrice)}
+        </span>
+      )}
+    </div>
+  </div>
+);
+
+// ============================================================
+// DealCard — Pending / Negotiating
+// ============================================================
+const DealCard = ({ deal }) => {
+  const statusStyles =
+    deal.status === "Negotiating"
+      ? "bg-amber-100 text-amber-700"
+      : "bg-blue-100 text-blue-700";
+
+  return (
+    <div className="bg-gray-50/80 border border-gray-100 rounded-xl p-3 space-y-2">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-bold text-gray-900 leading-snug">
+          {deal.course}
+        </p>
+        <span
+          className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide shrink-0 ${statusStyles}`}
+        >
+          {deal.status}
+        </span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[9px] bg-gray-200 text-gray-700 font-bold px-1.5 py-0.5 rounded uppercase tracking-wide">
+          {deal.category}
+        </span>
+        <span className="text-[9px] bg-gray-100 text-gray-600 font-bold px-1.5 py-0.5 rounded uppercase tracking-wide">
+          {deal.mode}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
+        <svg
+          className="w-3 h-3"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+          />
+        </svg>
+        <span className="font-medium">{deal.instructor}</span>
+      </div>
+
+      <div className="flex items-center justify-end gap-2 pt-1 border-t border-gray-100">
+        <span className="text-[10px] font-medium text-gray-400 line-through">
+          {formatPrice(deal.basePrice)}
+        </span>
+        <span className="text-[11px] font-bold text-green-600">
+          {formatPrice(deal.bidPrice)}
+        </span>
+      </div>
     </div>
   );
 };
