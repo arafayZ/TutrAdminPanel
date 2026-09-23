@@ -29,7 +29,7 @@ const statusLabel = (status) => {
 };
 
 // ============================================================
-// AVATAR FALLBACK — name initials if no profile picture
+// AVATAR FALLBACK
 // ============================================================
 const getAvatarSrc = (url, name = "") => {
   if (url && typeof url === "string" && url.trim() !== "") {
@@ -47,46 +47,54 @@ const getAvatarSrc = (url, name = "") => {
   )}&background=E5E7EB&color=374151&bold=true&size=128`;
 };
 
-const mapFromBackend = (dto) => ({
-  id: dto.id,
-  userId: dto.userId,
-  name: dto.tutorName || "Tutor",
-  email: dto.email || "",
-  phone: dto.phone || "—",
+const mapFromBackend = (dto) => {
+  // ✅ Distinguish banned vs rejected using accountStatus
+  const isBanned = dto.accountStatus === "BANNED";
+  const displayStatus = isBanned ? "Banned" : statusLabel(dto.status);
 
-  headline: dto.headline || "",
-  bio: dto.headline || "",
-  location: dto.location || "—",
-  institution: dto.universityName || "—",
-  highSchool: dto.collegeName || "—",
-  experience: dto.workExperience || "—",
-  gender: dto.gender || "—",
-  dateOfBirth: dto.dateOfBirth || "—",
-  subject: "",
-  status: statusLabel(dto.status),
-  uploadedAt: dto.uploadedAt,
-  verifiedAt: dto.verifiedAt,
-  appliedTime: dto.uploadedAt
-    ? `APPLIED ${timeAgo(dto.uploadedAt).toUpperCase()}`
-    : "—",
-  rejectionReason: dto.rejectionReason || null,
-  resubmissionCount: dto.resubmissionCount ?? 0,
-  avatar: getImageUrl(dto.profilePicture),
-  documents: [
-    dto.cnicImageUrl && {
-      id: 1,
-      title: "CNIC",
-      type: "image",
-      url: getImageUrl(dto.cnicImageUrl),
-    },
-    dto.certificateImageUrl && {
-      id: 2,
-      title: "CERTIFICATE",
-      type: "image",
-      url: getImageUrl(dto.certificateImageUrl),
-    },
-  ].filter(Boolean),
-});
+  return {
+    id: dto.id,
+    userId: dto.userId,
+    name: dto.tutorName || "Tutor",
+    email: dto.email || "",
+    phone: dto.phone || "—",
+
+    headline: dto.headline || "",
+    bio: dto.headline || "",
+    location: dto.location || "—",
+    institution: dto.universityName || "—",
+    highSchool: dto.collegeName || "—",
+    experience: dto.workExperience || "—",
+    gender: dto.gender || "—",
+    dateOfBirth: dto.dateOfBirth || "—",
+    subject: "",
+    status: displayStatus, // "Banned" or "Rejected" or ...
+    accountStatus: dto.accountStatus || null,
+    isBanned, // convenience flag
+    uploadedAt: dto.uploadedAt,
+    verifiedAt: dto.verifiedAt,
+    appliedTime: dto.uploadedAt
+      ? `APPLIED ${timeAgo(dto.uploadedAt).toUpperCase()}`
+      : "—",
+    rejectionReason: dto.rejectionReason || null,
+    resubmissionCount: dto.resubmissionCount ?? 0,
+    avatar: getImageUrl(dto.profilePicture),
+    documents: [
+      dto.cnicImageUrl && {
+        id: 1,
+        title: "CNIC",
+        type: "image",
+        url: getImageUrl(dto.cnicImageUrl),
+      },
+      dto.certificateImageUrl && {
+        id: 2,
+        title: "CERTIFICATE",
+        type: "image",
+        url: getImageUrl(dto.certificateImageUrl),
+      },
+    ].filter(Boolean),
+  };
+};
 
 // ============================================================
 // SPINNER
@@ -125,10 +133,12 @@ const VerificationRequests = () => {
   const [requests, setRequests] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  // ✅ Banned count tracked separately
   const [counts, setCounts] = useState({
     Pending: 0,
     Approved: 0,
     Rejected: 0,
+    Banned: 0,
   });
 
   const [confirmModal, setConfirmModal] = useState({
@@ -164,10 +174,23 @@ const VerificationRequests = () => {
         rRes.ok ? rRes.json() : [],
       ]);
 
+      const pendingList = Array.isArray(p) ? p : [];
+      const approvedList = Array.isArray(a) ? a : [];
+      const rejectedList = Array.isArray(r) ? r : [];
+
+      // ✅ Split rejected into banned + non-banned
+      const bannedCount = rejectedList.filter(
+        (item) => item.accountStatus === "BANNED",
+      ).length;
+      const rejectedOnly = rejectedList.filter(
+        (item) => item.accountStatus !== "BANNED",
+      ).length;
+
       setCounts({
-        Pending: Array.isArray(p) ? p.length : 0,
-        Approved: Array.isArray(a) ? a.length : 0,
-        Rejected: Array.isArray(r) ? r.length : 0,
+        Pending: pendingList.length,
+        Approved: approvedList.length,
+        Rejected: rejectedOnly,
+        Banned: bannedCount,
       });
     } catch (err) {
       console.error("Failed to fetch counts:", err);
@@ -180,13 +203,26 @@ const VerificationRequests = () => {
   const fetchRequests = async () => {
     setIsLoading(true);
     try {
-      const backendStatus = activeTab.toUpperCase();
+      // ✅ Banned tab fetches REJECTED from backend, then filters locally
+      const backendStatus =
+        activeTab === "Banned" ? "REJECTED" : activeTab.toUpperCase();
+
       const res = await adminFetch(
         `/api/admin/verifications?status=${backendStatus}`,
       );
       if (!res.ok) throw new Error("Failed to fetch verifications");
       const data = await res.json();
-      setRequests(data.map(mapFromBackend));
+
+      let mapped = data.map(mapFromBackend);
+
+      // ✅ Frontend filtering
+      if (activeTab === "Banned") {
+        mapped = mapped.filter((item) => item.isBanned);
+      } else if (activeTab === "Rejected") {
+        mapped = mapped.filter((item) => !item.isBanned);
+      }
+
+      setRequests(mapped);
     } catch (err) {
       console.error("Error fetching verifications:", err);
       setRequests([]);
@@ -380,6 +416,9 @@ const VerificationRequests = () => {
     return <NotificationsPage onBack={() => setViewState("dashboard")} />;
   }
 
+  // Tab definitions
+  const tabs = ["Pending", "Approved", "Rejected", "Banned"];
+
   return (
     <div className="flex h-screen bg-[#F8F9FB] font-sans text-gray-900 overflow-hidden relative">
       <Sidebar onGenerateReport={handleExportPDF} />
@@ -406,12 +445,13 @@ const VerificationRequests = () => {
               </p>
             </div>
 
+            {/* ✅ 4 Tabs with Banned */}
             <div className="bg-gray-200/70 p-1 rounded-2xl flex items-center text-xs font-semibold">
-              {["Pending", "Approved", "Rejected"].map((tab) => (
+              {tabs.map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`px-5 py-2 rounded-xl transition-all cursor-pointer ${
+                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer ${
                     activeTab === tab
                       ? "bg-white text-black shadow-xs font-bold"
                       : "text-gray-500 hover:text-black"
@@ -437,9 +477,9 @@ const VerificationRequests = () => {
                   return (
                     <div
                       key={item.id}
-                      className={`relative bg-white rounded-3xl p-6 border border-gray-100 shadow-xs flex flex-col justify-between space-y-6 transition-all ${
-                        isProcessing ? "opacity-60 pointer-events-none" : ""
-                      }`}
+                      className={`relative bg-white rounded-3xl p-6 border shadow-xs flex flex-col justify-between space-y-6 transition-all ${
+                        item.isBanned ? "border-red-200" : "border-gray-100"
+                      } ${isProcessing ? "opacity-60 pointer-events-none" : ""}`}
                     >
                       {isProcessing && (
                         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/70 backdrop-blur-xs rounded-3xl">
@@ -478,9 +518,17 @@ const VerificationRequests = () => {
                             </div>
                           </div>
 
-                          <span className="text-[10px] font-extrabold bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full uppercase tracking-wider">
-                            {item.appliedTime}
-                          </span>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="text-[10px] font-extrabold bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                              {item.appliedTime}
+                            </span>
+                            {/* ✅ Banned badge */}
+                            {item.isBanned && (
+                              <span className="text-[9px] font-extrabold bg-red-100 text-red-700 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                ⛔ Permanently Banned
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         {/* Documents */}
@@ -525,17 +573,38 @@ const VerificationRequests = () => {
                           )}
                         </div>
 
-                        {/* ✅ Rejection reason — shown on the Rejected tab */}
-                        {activeTab === "Rejected" && item.rejectionReason && (
-                          <div className="mt-5 p-3.5 bg-red-50 border border-red-100 rounded-2xl">
-                            <p className="text-[10px] font-extrabold uppercase tracking-wider text-red-700 mb-1.5">
-                              Reason for Rejection
-                            </p>
-                            <p className="text-[11px] text-red-700 leading-relaxed">
-                              {item.rejectionReason}
-                            </p>
-                          </div>
-                        )}
+                        {/* ✅ Rejection reason — shown on Rejected OR Banned tab */}
+                        {(activeTab === "Rejected" || activeTab === "Banned") &&
+                          item.rejectionReason && (
+                            <div
+                              className={`mt-5 p-3.5 border rounded-2xl ${
+                                item.isBanned
+                                  ? "bg-red-100 border-red-300"
+                                  : "bg-red-50 border-red-100"
+                              }`}
+                            >
+                              <p
+                                className={`text-[10px] font-extrabold uppercase tracking-wider mb-1.5 ${
+                                  item.isBanned
+                                    ? "text-red-800"
+                                    : "text-red-700"
+                                }`}
+                              >
+                                {item.isBanned
+                                  ? "Reason for Ban"
+                                  : "Reason for Rejection"}
+                              </p>
+                              <p
+                                className={`text-[11px] leading-relaxed ${
+                                  item.isBanned
+                                    ? "text-red-800"
+                                    : "text-red-700"
+                                }`}
+                              >
+                                {item.rejectionReason}
+                              </p>
+                            </div>
+                          )}
 
                         {/* Reject form (pending tab only) */}
                         {activeTab === "Pending" &&
@@ -652,7 +721,9 @@ const VerificationRequests = () => {
                               className={`font-bold ${
                                 activeTab === "Approved"
                                   ? "text-emerald-600"
-                                  : "text-red-600"
+                                  : activeTab === "Banned"
+                                    ? "text-red-800"
+                                    : "text-red-600"
                               }`}
                             >
                               {item.status.toUpperCase()}
@@ -698,18 +769,25 @@ const VerificationRequests = () => {
                 <h3 className="text-lg font-bold text-gray-900">
                   {selectedUser.name}
                 </h3>
-                <div className="mt-2">
+                <div className="mt-2 flex items-center gap-2">
                   <span
                     className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider ${
                       selectedUser.status === "Approved"
                         ? "bg-emerald-50 text-emerald-700"
-                        : selectedUser.status === "Rejected"
-                          ? "bg-red-50 text-red-700"
-                          : "bg-amber-50 text-amber-700"
+                        : selectedUser.isBanned
+                          ? "bg-red-100 text-red-800"
+                          : selectedUser.status === "Rejected"
+                            ? "bg-red-50 text-red-700"
+                            : "bg-amber-50 text-amber-700"
                     }`}
                   >
                     {selectedUser.status}
                   </span>
+                  {selectedUser.isBanned && (
+                    <span className="text-[9px] font-extrabold bg-red-100 text-red-700 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                      ⛔ Banned
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -805,13 +883,29 @@ const VerificationRequests = () => {
                 </div>
               </div>
 
-              {/* Rejection reason in modal too */}
+              {/* ✅ Rejection / Ban reason */}
               {selectedUser.rejectionReason && (
-                <div className="bg-red-50 p-3 rounded-2xl border border-red-100">
-                  <span className="text-[10px] text-red-700 font-bold uppercase tracking-wider block mb-1">
-                    Reason for Rejection
+                <div
+                  className={`p-3 rounded-2xl border ${
+                    selectedUser.isBanned
+                      ? "bg-red-100 border-red-300"
+                      : "bg-red-50 border-red-100"
+                  }`}
+                >
+                  <span
+                    className={`text-[10px] font-bold uppercase tracking-wider block mb-1 ${
+                      selectedUser.isBanned ? "text-red-800" : "text-red-700"
+                    }`}
+                  >
+                    {selectedUser.isBanned
+                      ? "Reason for Ban"
+                      : "Reason for Rejection"}
                   </span>
-                  <p className="text-red-700 leading-relaxed">
+                  <p
+                    className={`leading-relaxed ${
+                      selectedUser.isBanned ? "text-red-800" : "text-red-700"
+                    }`}
+                  >
                     {selectedUser.rejectionReason}
                   </p>
                 </div>
