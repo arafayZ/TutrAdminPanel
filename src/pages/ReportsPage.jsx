@@ -37,14 +37,23 @@ const timeAgo = (dt) => {
   return `${Math.floor(seconds / 86400)}d ago`;
 };
 
+// Reasons vary by report type
 const getSeverity = (reason) => {
   const high = [
     "HARASSMENT",
     "ABUSIVE_LANGUAGE",
     "FRAUD_OR_SCAM",
     "FAKE_CREDENTIALS",
+    "NON_PAYMENT",
+    "FALSE_REPORT_ABUSE",
   ];
-  const medium = ["NO_SHOW", "POOR_TEACHING", "UNPROFESSIONAL_CONDUCT"];
+  const medium = [
+    "NO_SHOW",
+    "POOR_TEACHING",
+    "UNPROFESSIONAL_CONDUCT",
+    "DISRESPECTFUL_CONDUCT",
+    "UNREALISTIC_DEMANDS",
+  ];
   if (high.includes(reason))
     return { label: "High", color: "bg-red-100 text-red-700" };
   if (medium.includes(reason))
@@ -89,6 +98,11 @@ const ReportsPage = () => {
   const [viewState, setViewState] = useState("reports");
   const [searchQuery, setSearchQuery] = useState("");
 
+  // ✅ NEW — toggle between report types
+  // "tutor" = student reports tutor (default)
+  // "student" = tutor reports student
+  const [reportType, setReportType] = useState("tutor");
+
   // Filter tab: which status we're viewing
   const [activeTab, setActiveTab] = useState("PENDING");
 
@@ -113,11 +127,17 @@ const ReportsPage = () => {
   });
 
   // Action modal
-  const [modalAction, setModalAction] = useState(null); // 'warning' | 'suspend' | 'dismiss' | null
+  const [modalAction, setModalAction] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Evidence lightbox
   const [lightboxUrl, setLightboxUrl] = useState(null);
+
+  // ✅ NEW — base URL switches based on report type
+  const baseUrl =
+    reportType === "tutor"
+      ? "/api/admin/reports"
+      : "/api/admin/student-reports";
 
   // ============================================================
   // FETCH REPORTS LIST
@@ -130,7 +150,7 @@ const ReportsPage = () => {
         searchQuery: searchQuery.trim() || null,
       };
 
-      const res = await adminFetch("/api/admin/reports/filter", {
+      const res = await adminFetch(`${baseUrl}/filter`, {
         method: "POST",
         body: JSON.stringify(payload),
       });
@@ -139,7 +159,6 @@ const ReportsPage = () => {
       const data = await res.json();
       setReports(data);
 
-      // Auto-select first
       if (data.length > 0) {
         const stillExists = data.find((r) => r.id === selectedReportId);
         handleOpenReport(stillExists || data[0]);
@@ -150,6 +169,8 @@ const ReportsPage = () => {
     } catch (err) {
       console.error("Error fetching reports:", err);
       setReports([]);
+      setSelectedReportId(null);
+      setReportDetail(null);
     } finally {
       setIsLoading(false);
     }
@@ -159,14 +180,14 @@ const ReportsPage = () => {
     const t = setTimeout(fetchReports, 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, searchQuery]);
+  }, [activeTab, searchQuery, reportType]);
 
   // ============================================================
   // FETCH STATS
   // ============================================================
   const fetchStats = async () => {
     try {
-      const res = await adminFetch("/api/admin/reports/stats");
+      const res = await adminFetch(`${baseUrl}/stats`);
       if (res.ok) {
         const data = await res.json();
         setStats(data);
@@ -179,7 +200,7 @@ const ReportsPage = () => {
   useEffect(() => {
     fetchStats();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [reportType]);
 
   // ============================================================
   // FETCH DETAIL
@@ -191,7 +212,7 @@ const ReportsPage = () => {
     setAdminNotes("");
 
     try {
-      const res = await adminFetch(`/api/admin/reports/${report.id}`);
+      const res = await adminFetch(`${baseUrl}/${report.id}`);
       if (!res.ok) throw new Error("Failed to fetch report details");
       const data = await res.json();
       setReportDetail(data);
@@ -211,7 +232,7 @@ const ReportsPage = () => {
     setIsSubmitting(true);
     try {
       const res = await adminFetch(
-        `/api/admin/reports/${reportDetail.id}/mark-under-review`,
+        `${baseUrl}/${reportDetail.id}/mark-under-review`,
         { method: "PATCH" },
       );
       if (!res.ok) throw new Error("Failed");
@@ -219,10 +240,7 @@ const ReportsPage = () => {
       await fetchReports();
       await fetchStats();
 
-      // Refetch detail
-      const detailRes = await adminFetch(
-        `/api/admin/reports/${reportDetail.id}`,
-      );
+      const detailRes = await adminFetch(`${baseUrl}/${reportDetail.id}`);
       if (detailRes.ok) setReportDetail(await detailRes.json());
     } catch (err) {
       console.error("Mark under review failed:", err);
@@ -244,16 +262,13 @@ const ReportsPage = () => {
 
     setIsSubmitting(true);
     try {
-      const res = await adminFetch(
-        `/api/admin/reports/${reportDetail.id}/resolve`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            action, // "WARNING_ISSUED" | "SUSPENDED" | "DISMISSED"
-            adminNotes: adminNotes.trim(),
-          }),
-        },
-      );
+      const res = await adminFetch(`${baseUrl}/${reportDetail.id}/resolve`, {
+        method: "POST",
+        body: JSON.stringify({
+          action,
+          adminNotes: adminNotes.trim(),
+        }),
+      });
       if (!res.ok) throw new Error("Resolve failed");
 
       setModalAction(null);
@@ -269,6 +284,8 @@ const ReportsPage = () => {
   // ============================================================
   // RENDER
   // ============================================================
+  const isTutorReport = reportType === "tutor";
+
   return (
     <div className="flex h-screen bg-[#F8F9FB] font-sans text-gray-900 overflow-hidden">
       <Sidebar
@@ -281,7 +298,7 @@ const ReportsPage = () => {
           setSearchQuery={setSearchQuery}
           viewState={viewState}
           setViewState={setViewState}
-          placeholder="Search tutor or student name..."
+          placeholder="Search by name..."
         />
 
         {viewState === "notifications" ? (
@@ -289,14 +306,41 @@ const ReportsPage = () => {
         ) : (
           <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
             {/* HEADER */}
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
-                Reports & Moderation
-              </h2>
-              <p className="text-xs text-gray-500 mt-1">
-                Review student reports against tutors and take moderation
-                action.
-              </p>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
+                  Reports & Moderation
+                </h2>
+                <p className="text-xs text-gray-500 mt-1">
+                  {isTutorReport
+                    ? "Review student reports against tutors and take moderation action."
+                    : "Review tutor reports against students and take moderation action."}
+                </p>
+              </div>
+
+              {/* ✅ TYPE TOGGLE */}
+              <div className="flex bg-gray-100 p-1 rounded-xl w-fit">
+                <button
+                  onClick={() => setReportType("tutor")}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    reportType === "tutor"
+                      ? "bg-white text-gray-900 shadow-xs"
+                      : "text-gray-500 hover:text-gray-900"
+                  }`}
+                >
+                  Student → Tutor
+                </button>
+                <button
+                  onClick={() => setReportType("student")}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    reportType === "student"
+                      ? "bg-white text-gray-900 shadow-xs"
+                      : "text-gray-500 hover:text-gray-900"
+                  }`}
+                >
+                  Tutor → Student
+                </button>
+              </div>
             </div>
 
             {/* STATS */}
@@ -374,6 +418,14 @@ const ReportsPage = () => {
                       const isSelected = selectedReportId === item.id;
                       const sev = getSeverity(item.reason);
 
+                      // ✅ Show names in correct order based on report type
+                      const fromName = isTutorReport
+                        ? item.studentName
+                        : item.tutorName;
+                      const toName = isTutorReport
+                        ? item.tutorName
+                        : item.studentName;
+
                       return (
                         <div
                           key={item.id}
@@ -406,11 +458,11 @@ const ReportsPage = () => {
                           <div className="flex items-center justify-between pt-1 text-[10px] text-gray-400">
                             <div className="flex items-center gap-1.5">
                               <span className="font-medium text-gray-600">
-                                {item.studentName}
+                                {fromName}
                               </span>
                               <span>→</span>
                               <span className="font-medium text-gray-600">
-                                {item.tutorName}
+                                {toName}
                               </span>
                             </div>
                             <span>{timeAgo(item.reportedAt)}</span>
@@ -494,23 +546,23 @@ const ReportsPage = () => {
                         )}
 
                         {/* RELATED CONNECTION */}
-                        {reportDetail.connection && (
+                        {reportDetail.connectionCourseName && (
                           <div>
                             <h4 className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2">
                               Related Connection
                             </h4>
                             <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 text-xs space-y-1">
                               <p className="font-bold text-gray-900">
-                                {reportDetail.connection.courseName}
+                                {reportDetail.connectionCourseName}
                               </p>
                               <p className="text-gray-500">
                                 Agreed Price: RS.{" "}
                                 {Number(
-                                  reportDetail.connection.agreedPrice || 0,
+                                  reportDetail.connectionAgreedPrice || 0,
                                 ).toLocaleString()}
                               </p>
                               <p className="text-gray-500">
-                                Status: {reportDetail.connection.status}
+                                Status: {reportDetail.connectionStatus || "—"}
                               </p>
                             </div>
                           </div>
@@ -528,7 +580,7 @@ const ReportsPage = () => {
                               reportDetail.status === "RESOLVED" ||
                               reportDetail.status === "DISMISSED"
                             }
-                            placeholder="Add internal notes about this report (min 10 characters)..."
+                            placeholder="Add internal notes (min 10 characters)..."
                             rows={3}
                             className="w-full text-xs p-3 border border-gray-200 rounded-xl focus:outline-none focus:border-black resize-none disabled:bg-gray-50 disabled:text-gray-500"
                           />
@@ -565,53 +617,69 @@ const ReportsPage = () => {
                         {/* REPORTER */}
                         <div>
                           <h4 className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2">
-                            Reporter
+                            Reporter ({isTutorReport ? "Student" : "Tutor"})
                           </h4>
                           <div className="bg-white border border-gray-100 rounded-xl p-3 space-y-2">
                             <div className="flex items-center gap-2">
                               <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center font-bold text-[10px]">
-                                {reportDetail.studentName?.[0] || "?"}
+                                {(isTutorReport
+                                  ? reportDetail.studentName
+                                  : reportDetail.tutorName)?.[0] || "?"}
                               </div>
                               <div className="min-w-0 flex-1">
                                 <p className="font-bold text-xs text-gray-900 truncate">
-                                  {reportDetail.studentName}
+                                  {isTutorReport
+                                    ? reportDetail.studentName
+                                    : reportDetail.tutorName}
                                 </p>
                                 <p className="text-[10px] text-gray-400 truncate">
-                                  Student
+                                  {isTutorReport ? "Student" : "Tutor"}
                                 </p>
                               </div>
                             </div>
                             <a
                               href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(
-                                reportDetail.studentEmail || "",
+                                (isTutorReport
+                                  ? reportDetail.studentEmail
+                                  : reportDetail.tutorEmail) || "",
                               )}&su=${encodeURIComponent(
-                                `TUTR - Message for ${reportDetail.studentName || "Student"}`,
+                                `TUTR - Message for ${
+                                  isTutorReport
+                                    ? reportDetail.studentName
+                                    : reportDetail.tutorName
+                                }`,
                               )}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="block text-center w-full py-1.5 bg-black text-white text-[10px] font-bold rounded-lg hover:bg-zinc-800"
                             >
-                              Email Student
+                              Email {isTutorReport ? "Student" : "Tutor"}
                             </a>
                           </div>
                         </div>
 
-                        {/* REPORTED TUTOR */}
+                        {/* REPORTED */}
                         <div>
                           <h4 className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2">
-                            Reported Tutor
+                            Reported {isTutorReport ? "Tutor" : "Student"}
                           </h4>
                           <div className="bg-white border border-gray-100 rounded-xl p-3 space-y-2">
                             <div className="flex items-center gap-2">
                               <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center font-bold text-[10px]">
-                                {reportDetail.tutorName?.[0] || "?"}
+                                {(isTutorReport
+                                  ? reportDetail.tutorName
+                                  : reportDetail.studentName)?.[0] || "?"}
                               </div>
                               <div className="min-w-0 flex-1">
                                 <p className="font-bold text-xs text-gray-900 truncate">
-                                  {reportDetail.tutorName}
+                                  {isTutorReport
+                                    ? reportDetail.tutorName
+                                    : reportDetail.studentName}
                                 </p>
                                 <p className="text-[10px] text-gray-400">
-                                  {reportDetail.tutorStatus || "Tutor"}
+                                  {isTutorReport
+                                    ? reportDetail.tutorStatus || "Tutor"
+                                    : reportDetail.studentStatus || "Student"}
                                 </p>
                               </div>
                             </div>
@@ -624,9 +692,14 @@ const ReportsPage = () => {
                             Previous Offenses
                           </p>
                           <p className="font-bold text-sm text-gray-900 mt-1">
-                            {reportDetail.tutorWarningCount ?? 0} Warnings
+                            {isTutorReport
+                              ? (reportDetail.tutorWarningCount ?? 0)
+                              : (reportDetail.studentWarningCount ?? 0)}{" "}
+                            Warnings
                           </p>
-                          {(reportDetail.tutorWarningCount ?? 0) >= 3 && (
+                          {((isTutorReport
+                            ? reportDetail.tutorWarningCount
+                            : reportDetail.studentWarningCount) ?? 0) >= 3 && (
                             <span className="inline-block mt-1 text-[9px] font-extrabold text-red-500 uppercase tracking-wide">
                               At Limit
                             </span>
@@ -662,7 +735,7 @@ const ReportsPage = () => {
                                 onClick={() => setModalAction("suspend")}
                                 className="w-full bg-[#D32F2F] hover:bg-red-700 text-white font-bold text-xs py-2.5 rounded-xl transition-colors cursor-pointer"
                               >
-                                Suspend Tutor
+                                Suspend {isTutorReport ? "Tutor" : "Student"}
                               </button>
 
                               <button
@@ -711,7 +784,9 @@ const ReportsPage = () => {
             <>
               This will send a formal warning to{" "}
               <span className="font-semibold text-gray-900">
-                {reportDetail.tutorName}
+                {isTutorReport
+                  ? reportDetail.tutorName
+                  : reportDetail.studentName}
               </span>{" "}
               and increment their warning count.
             </>
@@ -727,18 +802,20 @@ const ReportsPage = () => {
       {/* SUSPEND MODAL */}
       {modalAction === "suspend" && reportDetail && (
         <ConfirmModal
-          title="Suspend Tutor"
+          title={`Suspend ${isTutorReport ? "Tutor" : "Student"}`}
           description={
             <>
               Are you sure you want to suspend{" "}
               <span className="font-semibold text-gray-900">
-                {reportDetail.tutorName}
+                {isTutorReport
+                  ? reportDetail.tutorName
+                  : reportDetail.studentName}
               </span>
               ? This will disable their account and cancel all active
               connections.
             </>
           }
-          confirmText="Suspend Tutor"
+          confirmText={`Suspend ${isTutorReport ? "Tutor" : "Student"}`}
           confirmClass="bg-[#D32F2F] hover:bg-red-700"
           onConfirm={() => handleResolve("SUSPENDED")}
           onCancel={() => setModalAction(null)}

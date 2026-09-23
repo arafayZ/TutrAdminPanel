@@ -31,6 +31,14 @@ const formatPrice = (num) => {
   return `RS. ${Number(num).toLocaleString()}`;
 };
 
+const formatReason = (r) => {
+  if (!r) return "—";
+  return r
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
 const formatStudentId = (id) => `STU-${id}`;
 
 const getAvatarSrc = (url, name = "") => {
@@ -79,6 +87,10 @@ const mapListStudent = (dto) => ({
   status: dto.status,
   coursesEnrolled: dto.coursesEnrolled,
   enrolledCourseNames: dto.enrolledCourseNames || [],
+  // ✅ Live from backend (falls back to 0 if not sent)
+  reports: String(dto.reports ?? 0),
+  warnings: dto.warnings ?? 0,
+  warningHistory: dto.warningHistory || [],
 });
 
 const mapDetailStudent = (dto) => ({
@@ -100,6 +112,17 @@ const mapDetailStudent = (dto) => ({
   status: dto.status,
   totalCourses: dto.totalCourses,
   activeTutors: dto.activeTutors,
+
+  // ✅ Live from backend
+  reports: String(dto.reports ?? 0),
+  warnings: dto.warnings ?? 0,
+  warningHistory: (dto.warningHistory || []).map((w) => ({
+    id: w.id,
+    reason: w.reason,
+    issuedAt: w.issuedAt,
+    adminNotes: w.adminNotes,
+    sourceReportId: w.sourceReportId,
+  })),
 
   enrolledCourses: (dto.enrolledCourses || []).map((c) => ({
     courseId: c.courseId,
@@ -267,6 +290,9 @@ const StudentManagement = () => {
         deals: [],
         totalCourses: student.coursesEnrolled,
         activeTutors: 0,
+        reports: "0",
+        warnings: 0,
+        warningHistory: [],
       });
     } finally {
       setIsLoadingDetail(false);
@@ -440,18 +466,45 @@ const StudentManagement = () => {
     // ---- Summary Stats ----
     autoTable(doc, {
       startY: y,
-      head: [["Total Courses", "Active Tutors"]],
+      head: [["Total Courses", "Active Tutors", "Reports", "Warnings"]],
       body: [
         [
           String(studentDetail.totalCourses ?? 0),
           String(studentDetail.activeTutors ?? 0),
+          String(studentDetail.reports ?? 0),
+          String(studentDetail.warnings ?? 0),
         ],
       ],
       theme: "grid",
       headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] },
+      styles: { fontSize: 8 },
       margin: { left: margin, right: margin },
     });
     y = doc.lastAutoTable.finalY + 8;
+
+    // ---- Warning History ----
+    if (
+      studentDetail.warningHistory &&
+      studentDetail.warningHistory.length > 0
+    ) {
+      autoTable(doc, {
+        startY: y,
+        head: [["Warning Reason", "Issued On"]],
+        body: studentDetail.warningHistory.map((w) => [
+          formatReason(w.reason),
+          new Date(w.issuedAt).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          }),
+        ]),
+        theme: "grid",
+        headStyles: { fillColor: [217, 119, 6], textColor: [255, 255, 255] },
+        styles: { fontSize: 8 },
+        margin: { left: margin, right: margin },
+      });
+      y = doc.lastAutoTable.finalY + 8;
+    }
 
     // ---- Enrolled Courses ----
     if (
@@ -540,7 +593,6 @@ const StudentManagement = () => {
       });
       y = doc.lastAutoTable.finalY + 8;
     } else {
-      // Show an empty-state line so the section is still visible
       doc.setFontSize(9);
       doc.setFont("helvetica", "italic");
       doc.setTextColor(150, 150, 150);
@@ -880,8 +932,8 @@ const StudentManagement = () => {
                   </div>
                 </div>
 
-                {/* Stats */}
-                <div className="grid grid-cols-2 gap-2 text-left">
+                {/* Stats — 3 tiles */}
+                <div className="grid grid-cols-2 gap-2">
                   <div className="bg-gray-50/80 p-2.5 rounded-xl border border-gray-100">
                     <span className="text-[8px] font-bold uppercase text-gray-400 block tracking-wider">
                       TOTAL COURSES
@@ -898,6 +950,59 @@ const StudentManagement = () => {
                       {studentDetail.activeTutors}
                     </span>
                   </div>
+                  <div className="bg-gray-50/80 p-2.5 rounded-xl border border-gray-100">
+                    <span className="text-[8px] font-bold uppercase text-gray-400 block tracking-wider">
+                      REPORTS
+                    </span>
+                    <span className="text-base font-bold text-gray-900">
+                      {studentDetail.reports}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Warnings — amber box */}
+                <div className="bg-amber-50 p-3 rounded-xl border border-amber-100 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[8px] font-bold uppercase text-amber-600 tracking-wider">
+                      WARNINGS
+                    </span>
+                    {(studentDetail.warnings ?? 0) >= 3 && (
+                      <span className="text-[9px] font-extrabold text-red-500 uppercase tracking-wide">
+                        At Limit
+                      </span>
+                    )}
+                  </div>
+
+                  <span className="text-base font-bold text-amber-700 block">
+                    {studentDetail.warnings ?? 0}
+                  </span>
+
+                  {studentDetail.warningHistory &&
+                  studentDetail.warningHistory.length > 0 ? (
+                    <div className="space-y-1.5 pt-2 border-t border-amber-200">
+                      {studentDetail.warningHistory.map((w) => (
+                        <div
+                          key={w.id}
+                          className="flex items-center justify-between text-[10px]"
+                        >
+                          <span className="font-semibold text-amber-800 truncate pr-2">
+                            {formatReason(w.reason)}
+                          </span>
+                          <span className="text-amber-600 shrink-0">
+                            {new Date(w.issuedAt).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "2-digit",
+                            })}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-amber-600/70 italic pt-2 border-t border-amber-200">
+                      No prior warnings
+                    </p>
+                  )}
                 </div>
 
                 {/* Enrolled Courses */}
@@ -963,7 +1068,6 @@ const StudentManagement = () => {
           </div>
 
           <div className="pt-6 border-t border-gray-100 space-y-2">
-            {/* Export Individual PDF */}
             <button
               onClick={handleExportIndividualPDF}
               disabled={!studentDetail || isLoadingDetail}
@@ -1077,9 +1181,6 @@ const DetailField = ({ label, value }) => (
   </div>
 );
 
-// ============================================================
-// CourseCard — Enrolled + Favorite
-// ============================================================
 const CourseCard = ({ course, favorite = false }) => (
   <div className="bg-gray-50/80 border border-gray-100 rounded-xl p-3 space-y-2">
     <div className="flex items-start justify-between gap-2">
@@ -1146,9 +1247,6 @@ const CourseCard = ({ course, favorite = false }) => (
   </div>
 );
 
-// ============================================================
-// DealCard — Pending / Negotiating
-// ============================================================
 const DealCard = ({ deal }) => {
   const statusStyles =
     deal.status === "Negotiating"
