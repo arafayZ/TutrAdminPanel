@@ -69,7 +69,7 @@ const mapStatusFilter = (status) => {
   if (status === "Active") return "ACTIVE";
   if (status === "Inactive") return "INACTIVE";
   if (status === "Suspended") return "SUSPENDED";
-  return null; // All Tutors
+  return null;
 };
 
 const mapCategoryFilter = (cat) => {
@@ -84,13 +84,6 @@ const mapModeFilter = (mode) => {
 
 // ============================================================
 // STATUS NORMALIZER
-// Backend enum → Display label
-// ACTIVE      → "Active"
-// INACTIVE    → "Inactive"
-// SUSPENDED   → "Suspended"
-// PENDING     → "Pending"
-// REJECTED    → "Rejected"
-// DELETED     → "Deleted"
 // ============================================================
 const normalizeStatus = (status) => {
   if (!status) return "Unknown";
@@ -110,7 +103,6 @@ const normalizeStatus = (status) => {
     case "DELETED":
       return "Deleted";
     default:
-      // Unknown → capitalize first letter only
       return s.charAt(0) + s.slice(1).toLowerCase();
   }
 };
@@ -169,7 +161,6 @@ const mapDetailTutor = (dto) => ({
   reports: String(dto.reports ?? 0),
   warnings: dto.warnings ?? 0,
 
-  // ✅ Warning history from backend
   warningHistory: (dto.warningHistory || []).map((w) => ({
     id: w.id,
     reason: w.reason,
@@ -210,6 +201,32 @@ const mapDetailTutor = (dto) => ({
     status: d.status,
   })),
 });
+
+// ============================================================
+// SPINNER
+// ============================================================
+const Spinner = ({ className = "w-3.5 h-3.5" }) => (
+  <svg
+    className={`${className} animate-spin`}
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    viewBox="0 0 24 24"
+  >
+    <circle
+      className="opacity-25"
+      cx="12"
+      cy="12"
+      r="10"
+      stroke="currentColor"
+      strokeWidth="4"
+    />
+    <path
+      className="opacity-75"
+      fill="currentColor"
+      d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+    />
+  </svg>
+);
 
 // ============================================================
 // Custom Dropdown Component
@@ -293,6 +310,9 @@ const TutorManagement = () => {
 
   const [tutorToSuspend, setTutorToSuspend] = useState(null);
 
+  // ✅ NEW: track status-change in-flight
+  const [isProcessingStatus, setIsProcessingStatus] = useState(false);
+
   // ============================================================
   // FETCH TUTORS LIST
   // ============================================================
@@ -363,11 +383,12 @@ const TutorManagement = () => {
   // SUSPEND / REACTIVATE
   // ============================================================
   const confirmStatusChange = async () => {
-    if (!tutorToSuspend) return;
+    if (!tutorToSuspend || isProcessingStatus) return;
 
     const isSuspend = tutorToSuspend.status === "Active";
     const endpoint = isSuspend ? "suspend" : "reactivate";
 
+    setIsProcessingStatus(true);
     try {
       const res = await adminFetch(
         `/api/admin/tutors/${tutorToSuspend.rawId}/${endpoint}`,
@@ -389,10 +410,15 @@ const TutorManagement = () => {
           );
         }
       }
+
+      setTutorToSuspend(null);
     } catch (err) {
       console.error(`${endpoint} error:`, err);
+      alert(
+        `Failed to ${isSuspend ? "suspend" : "reactivate"} tutor. Please try again.`,
+      );
     } finally {
-      setTutorToSuspend(null);
+      setIsProcessingStatus(false);
     }
   };
 
@@ -567,7 +593,6 @@ const TutorManagement = () => {
     });
     y = doc.lastAutoTable.finalY + 8;
 
-    // ✅ Warning history table in PDF
     if (tutorDetail.warningHistory?.length > 0) {
       autoTable(doc, {
         startY: y,
@@ -1213,14 +1238,16 @@ const TutorManagement = () => {
             {selectedTutor.status === "Suspended" ? (
               <button
                 onClick={() => setTutorToSuspend(selectedTutor)}
-                className="w-full py-2.5 border border-green-300 text-green-700 text-xs font-bold rounded-xl hover:bg-green-50 transition-colors cursor-pointer"
+                disabled={isProcessingStatus}
+                className="w-full py-2.5 border border-green-300 text-green-700 text-xs font-bold rounded-xl hover:bg-green-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 REACTIVATE TUTOR
               </button>
             ) : (
               <button
                 onClick={() => setTutorToSuspend(selectedTutor)}
-                className="w-full py-2.5 border border-red-300 text-red-600 text-xs font-bold rounded-xl hover:bg-red-50 transition-colors cursor-pointer"
+                disabled={isProcessingStatus}
+                className="w-full py-2.5 border border-red-300 text-red-600 text-xs font-bold rounded-xl hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 SUSPEND TUTOR
               </button>
@@ -1266,19 +1293,32 @@ const TutorManagement = () => {
                 <div className="flex items-center justify-end gap-2 pt-2">
                   <button
                     onClick={() => setTutorToSuspend(null)}
-                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                    disabled={isProcessingStatus}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={confirmStatusChange}
-                    className={`px-4 py-2 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                    disabled={isProcessingStatus}
+                    className={`px-4 py-2 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed ${
                       isSuspend
                         ? "bg-red-600 hover:bg-red-700"
                         : "bg-green-600 hover:bg-green-700"
                     }`}
                   >
-                    {isSuspend ? "Confirm Suspend" : "Confirm Reactivate"}
+                    {isProcessingStatus ? (
+                      <>
+                        <Spinner className="w-3.5 h-3.5" />
+                        <span>
+                          {isSuspend ? "Suspending..." : "Reactivating..."}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        {isSuspend ? "Confirm Suspend" : "Confirm Reactivate"}
+                      </>
+                    )}
                   </button>
                 </div>
               </div>

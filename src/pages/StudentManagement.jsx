@@ -87,7 +87,6 @@ const mapListStudent = (dto) => ({
   status: dto.status,
   coursesEnrolled: dto.coursesEnrolled,
   enrolledCourseNames: dto.enrolledCourseNames || [],
-  // ✅ Live from backend (falls back to 0 if not sent)
   reports: String(dto.reports ?? 0),
   warnings: dto.warnings ?? 0,
   warningHistory: dto.warningHistory || [],
@@ -113,7 +112,6 @@ const mapDetailStudent = (dto) => ({
   totalCourses: dto.totalCourses,
   activeTutors: dto.activeTutors,
 
-  // ✅ Live from backend
   reports: String(dto.reports ?? 0),
   warnings: dto.warnings ?? 0,
   warningHistory: (dto.warningHistory || []).map((w) => ({
@@ -155,6 +153,32 @@ const mapDetailStudent = (dto) => ({
     status: d.status,
   })),
 });
+
+// ============================================================
+// SPINNER
+// ============================================================
+const Spinner = ({ className = "w-3.5 h-3.5" }) => (
+  <svg
+    className={`${className} animate-spin`}
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    viewBox="0 0 24 24"
+  >
+    <circle
+      className="opacity-25"
+      cx="12"
+      cy="12"
+      r="10"
+      stroke="currentColor"
+      strokeWidth="4"
+    />
+    <path
+      className="opacity-75"
+      fill="currentColor"
+      d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+    />
+  </svg>
+);
 
 // ============================================================
 // Custom Dropdown
@@ -234,6 +258,9 @@ const StudentManagement = () => {
 
   const [studentToSuspend, setStudentToSuspend] = useState(null);
 
+  // ✅ NEW: track status-change in-flight
+  const [isProcessingStatus, setIsProcessingStatus] = useState(false);
+
   // ============================================================
   // FETCH STUDENTS LIST
   // ============================================================
@@ -308,11 +335,12 @@ const StudentManagement = () => {
   // SUSPEND / REACTIVATE STUDENT
   // ============================================================
   const confirmStatusChange = async () => {
-    if (!studentToSuspend) return;
+    if (!studentToSuspend || isProcessingStatus) return;
 
     const isSuspend = studentToSuspend.status === "Active";
     const endpoint = isSuspend ? "suspend" : "reactivate";
 
+    setIsProcessingStatus(true);
     try {
       const res = await adminFetch(
         `/api/admin/students/${studentToSuspend.rawId}/${endpoint}`,
@@ -322,10 +350,14 @@ const StudentManagement = () => {
 
       await fetchStudents();
       handleCloseStudent();
+      setStudentToSuspend(null);
     } catch (err) {
       console.error(`${endpoint} error:`, err);
+      alert(
+        `Failed to ${isSuspend ? "suspend" : "reactivate"} student. Please try again.`,
+      );
     } finally {
-      setStudentToSuspend(null);
+      setIsProcessingStatus(false);
     }
   };
 
@@ -379,7 +411,6 @@ const StudentManagement = () => {
     const margin = 14;
     let y = 15;
 
-    // ---- Header ----
     doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
     doc.text("TUTR - Student Profile", margin, y);
@@ -396,7 +427,6 @@ const StudentManagement = () => {
     doc.setTextColor(0, 0, 0);
     y += 10;
 
-    // ---- Identity ----
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
     doc.text(studentDetail.name || "—", margin, y);
@@ -413,7 +443,6 @@ const StudentManagement = () => {
     doc.setTextColor(0, 0, 0);
     y += 8;
 
-    // ---- Status Banner ----
     const isActive = studentDetail.status === "Active";
     doc.setFillColor(
       isActive ? 220 : 254,
@@ -436,7 +465,6 @@ const StudentManagement = () => {
     doc.setTextColor(0, 0, 0);
     y += 16;
 
-    // ---- Personal Information Table ----
     const personalRows = [
       ["First Name", studentDetail.firstName || "—"],
       ["Last Name", studentDetail.lastName || "—"],
@@ -463,7 +491,6 @@ const StudentManagement = () => {
     });
     y = doc.lastAutoTable.finalY + 8;
 
-    // ---- Summary Stats ----
     autoTable(doc, {
       startY: y,
       head: [["Total Courses", "Active Tutors", "Reports", "Warnings"]],
@@ -482,7 +509,6 @@ const StudentManagement = () => {
     });
     y = doc.lastAutoTable.finalY + 8;
 
-    // ---- Warning History ----
     if (
       studentDetail.warningHistory &&
       studentDetail.warningHistory.length > 0
@@ -506,7 +532,6 @@ const StudentManagement = () => {
       y = doc.lastAutoTable.finalY + 8;
     }
 
-    // ---- Enrolled Courses ----
     if (
       studentDetail.enrolledCourses &&
       studentDetail.enrolledCourses.length > 0
@@ -539,7 +564,6 @@ const StudentManagement = () => {
       y = doc.lastAutoTable.finalY + 8;
     }
 
-    // ---- Favorite Courses ----
     if (
       studentDetail.favoriteCourses &&
       studentDetail.favoriteCourses.length > 0
@@ -562,7 +586,6 @@ const StudentManagement = () => {
       y = doc.lastAutoTable.finalY + 8;
     }
 
-    // ---- Deals ----
     if (studentDetail.deals && studentDetail.deals.length > 0) {
       autoTable(doc, {
         startY: y,
@@ -601,7 +624,6 @@ const StudentManagement = () => {
       y += 6;
     }
 
-    // ---- Footer ----
     const pageCount = doc.internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
@@ -960,7 +982,7 @@ const StudentManagement = () => {
                   </div>
                 </div>
 
-                {/* Warnings — amber box */}
+                {/* Warnings */}
                 <div className="bg-amber-50 p-3 rounded-xl border border-amber-100 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[8px] font-bold uppercase text-amber-600 tracking-wider">
@@ -1092,14 +1114,16 @@ const StudentManagement = () => {
             {selectedStudent?.status === "Suspended" ? (
               <button
                 onClick={() => setStudentToSuspend(selectedStudent)}
-                className="w-full py-2.5 border border-green-300 text-green-700 text-xs font-bold rounded-xl hover:bg-green-50 transition-colors cursor-pointer"
+                disabled={isProcessingStatus}
+                className="w-full py-2.5 border border-green-300 text-green-700 text-xs font-bold rounded-xl hover:bg-green-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 REACTIVATE STUDENT
               </button>
             ) : (
               <button
                 onClick={() => setStudentToSuspend(selectedStudent)}
-                className="w-full py-2.5 border border-red-300 text-red-600 text-xs font-bold rounded-xl hover:bg-red-50 transition-colors cursor-pointer"
+                disabled={isProcessingStatus}
+                className="w-full py-2.5 border border-red-300 text-red-600 text-xs font-bold rounded-xl hover:bg-red-50 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 SUSPEND STUDENT
               </button>
@@ -1144,19 +1168,32 @@ const StudentManagement = () => {
                 <div className="flex items-center justify-end gap-2 pt-2">
                   <button
                     onClick={() => setStudentToSuspend(null)}
-                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                    disabled={isProcessingStatus}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={confirmStatusChange}
-                    className={`px-4 py-2 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+                    disabled={isProcessingStatus}
+                    className={`px-4 py-2 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed ${
                       isSuspend
                         ? "bg-red-600 hover:bg-red-700"
                         : "bg-green-600 hover:bg-green-700"
                     }`}
                   >
-                    {isSuspend ? "Confirm Suspend" : "Confirm Reactivate"}
+                    {isProcessingStatus ? (
+                      <>
+                        <Spinner className="w-3.5 h-3.5" />
+                        <span>
+                          {isSuspend ? "Suspending..." : "Reactivating..."}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        {isSuspend ? "Confirm Suspend" : "Confirm Reactivate"}
+                      </>
+                    )}
                   </button>
                 </div>
               </div>

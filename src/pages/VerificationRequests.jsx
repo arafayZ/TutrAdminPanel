@@ -1,708 +1,823 @@
-import React, { useState } from 'react';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import Sidebar from '../components/Sidebar';
-import AppIcon from '../assets/tutr_icon.png';
-import NotificationsPage from './NotificationsPage'; 
-import Navbar from '../components/Navbar';
+import React, { useState, useEffect } from "react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import Sidebar from "../components/Sidebar";
+import NotificationsPage from "./NotificationsPage";
+import Navbar from "../components/Navbar";
+import { adminFetch, getImageUrl } from "../api/adminClient";
 
+// ============================================================
+// HELPERS
+// ============================================================
+
+const timeAgo = (dt) => {
+  if (!dt) return "";
+  const seconds = Math.floor((Date.now() - new Date(dt).getTime()) / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
+};
+
+const statusLabel = (status) => {
+  if (!status) return "Pending";
+  const s = String(status).toUpperCase();
+  if (s === "PENDING") return "Pending";
+  if (s === "APPROVED") return "Approved";
+  if (s === "REJECTED") return "Rejected";
+  return status;
+};
+
+// ============================================================
+// AVATAR FALLBACK — name initials if no profile picture
+// ============================================================
+const getAvatarSrc = (url, name = "") => {
+  if (url && typeof url === "string" && url.trim() !== "") {
+    return url;
+  }
+  const initials = (name || "T T")
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(
+    initials,
+  )}&background=E5E7EB&color=374151&bold=true&size=128`;
+};
+
+const mapFromBackend = (dto) => ({
+  id: dto.id,
+  userId: dto.userId,
+  name: dto.tutorName || "Tutor",
+  email: dto.email || "",
+  phone: dto.phone || "—",
+
+  headline: dto.headline || "",
+  bio: dto.headline || "",
+  location: dto.location || "—",
+  institution: dto.universityName || "—",
+  highSchool: dto.collegeName || "—",
+  experience: dto.workExperience || "—",
+  gender: dto.gender || "—",
+  dateOfBirth: dto.dateOfBirth || "—",
+  subject: "",
+  status: statusLabel(dto.status),
+  uploadedAt: dto.uploadedAt,
+  verifiedAt: dto.verifiedAt,
+  appliedTime: dto.uploadedAt
+    ? `APPLIED ${timeAgo(dto.uploadedAt).toUpperCase()}`
+    : "—",
+  rejectionReason: dto.rejectionReason || null,
+  resubmissionCount: dto.resubmissionCount ?? 0,
+  avatar: getImageUrl(dto.profilePicture),
+  documents: [
+    dto.cnicImageUrl && {
+      id: 1,
+      title: "CNIC",
+      type: "image",
+      url: getImageUrl(dto.cnicImageUrl),
+    },
+    dto.certificateImageUrl && {
+      id: 2,
+      title: "CERTIFICATE",
+      type: "image",
+      url: getImageUrl(dto.certificateImageUrl),
+    },
+  ].filter(Boolean),
+});
+
+// ============================================================
+// SPINNER
+// ============================================================
+const Spinner = ({ className = "w-3.5 h-3.5" }) => (
+  <svg
+    className={`${className} animate-spin`}
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    viewBox="0 0 24 24"
+  >
+    <circle
+      className="opacity-25"
+      cx="12"
+      cy="12"
+      r="10"
+      stroke="currentColor"
+      strokeWidth="4"
+    />
+    <path
+      className="opacity-75"
+      fill="currentColor"
+      d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+    />
+  </svg>
+);
+
+// ============================================================
+// MAIN COMPONENT
+// ============================================================
 const VerificationRequests = () => {
-  // Tab State
-  const [activeTab, setActiveTab] = useState('Pending'); // 'Pending', 'Approved', 'Rejected'
-  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState("Pending");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [viewState, setViewState] = useState("dashboard");
 
-  // View State (dashboard / notifications) — FIX: this was missing before
-  const [viewState, setViewState] = useState('dashboard');
+  const [requests, setRequests] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Confirmation Modal State
-  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', action: null });
+  const [counts, setCounts] = useState({
+    Pending: 0,
+    Approved: 0,
+    Rejected: 0,
+  });
 
-  // Track which card is currently showing the rejection input
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    action: null,
+  });
+
   const [activeRejectId, setActiveRejectId] = useState(null);
-  
-  // Rejection reason input tracking per card ID
   const [rejectionReasons, setRejectionReasons] = useState({});
+  const [permanentBanFlags, setPermanentBanFlags] = useState({});
 
-  // Document Viewer Modal State
   const [viewingDocument, setViewingDocument] = useState(null);
-
-  // Profile Details Modal State (New Feature)
   const [selectedUser, setSelectedUser] = useState(null);
 
-  // Mock Verification Data (3 Pending, 4 Approved, 1 Rejected)
-  const [requests, setRequests] = useState([
-  // --- 3 PENDING REQUESTS ---
-  {
-    id: "VER-101",
-    name: "Ayesha Khan",
-    email: "ayesha.khan@gmail.com",
-    phone: "+92 300 4567891",
-    subject: "MATHEMATICS",
-    degree: "MS Mathematics",
-    institution: "University of Karachi",
-    experience: "5 Years",
-    hourlyRate: "$18/hr",
-    bio: "Experienced mathematics tutor specializing in calculus, algebra, trigonometry, and O/A Level mathematics.",
-    appliedTime: "APPLIED 2H AGO",
-    status: "Pending",
-    avatar:
-      "https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=150&auto=format&fit=crop&q=80",
-    documents: [
-      {
-        id: 1,
-        title: "CNIC FRONT",
-        type: "image",
-        url: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=400&auto=format&fit=crop&q=80"
-      },
-      {
-        id: 2,
-        title: "MS DEGREE",
-        type: "image",
-        url: "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=400&auto=format&fit=crop&q=80"
-      },
-      {
-        id: 3,
-        title: "TRANSCRIPT",
-        type: "image",
-        url: "https://images.unsplash.com/photo-1450101499163-c8848c66ca85?w=400&auto=format&fit=crop&q=80"
-      }
-    ]
-  },
+  const [processingIds, setProcessingIds] = useState(new Set());
 
-  {
-    id: "VER-102",
-    name: "Muhammad Hamza",
-    email: "hamza.ahmed@gmail.com",
-    phone: "+92 321 6789045",
-    subject: "COMPUTER SCIENCE",
-    degree: "BS Computer Science",
-    institution: "FAST NUCES Karachi",
-    experience: "3 Years",
-    hourlyRate: "$20/hr",
-    bio: "Software developer and computer science tutor specializing in programming, data structures, databases, and web development.",
-    appliedTime: "APPLIED 5H AGO",
-    status: "Pending",
-    avatar:
-      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
-    documents: [
-      {
-        id: 1,
-        title: "CNIC FRONT",
-        type: "image",
-        url: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=400&auto=format&fit=crop&q=80"
-      },
-      {
-        id: 2,
-        title: "BSCS DEGREE.PDF",
-        type: "pdf",
-        fileName: "BSCS_DEGREE.PDF"
-      },
-      {
-        id: 3,
-        title: "HEC VERIFICATION",
-        type: "missing"
-      }
-    ]
-  },
+  // ============================================================
+  // FETCH COUNTS
+  // ============================================================
+  const fetchCounts = async () => {
+    try {
+      const [pRes, aRes, rRes] = await Promise.all([
+        adminFetch(`/api/admin/verifications?status=PENDING`),
+        adminFetch(`/api/admin/verifications?status=APPROVED`),
+        adminFetch(`/api/admin/verifications?status=REJECTED`),
+      ]);
 
-  {
-    id: "VER-103",
-    name: "Sana Ahmed",
-    email: "sana.ahmed@gmail.com",
-    phone: "+92 333 7812456",
-    subject: "PHYSICS",
-    degree: "MPhil Physics",
-    institution: "University of the Punjab",
-    experience: "6 Years",
-    hourlyRate: "$17/hr",
-    bio: "Physics lecturer with experience teaching mechanics, electromagnetism, thermodynamics, and intermediate-level physics.",
-    appliedTime: "APPLIED YESTERDAY",
-    status: "Pending",
-    avatar:
-      "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80",
-    documents: [
-      {
-        id: 1,
-        title: "CNIC",
-        type: "image",
-        url: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=400&auto=format&fit=crop&q=80"
-      },
-      {
-        id: 2,
-        title: "MPHIL DEGREE",
-        type: "image",
-        url: "https://images.unsplash.com/photo-1606761568499-6d2451b23c66?w=400&auto=format&fit=crop&q=80"
-      },
-      {
-        id: 3,
-        title: "EXPERIENCE CERTIFICATE",
-        type: "image",
-        url: "https://images.unsplash.com/photo-1554224154-26032ffc0d07?w=400&auto=format&fit=crop&q=80"
-      }
-    ]
-  },
+      const [p, a, r] = await Promise.all([
+        pRes.ok ? pRes.json() : [],
+        aRes.ok ? aRes.json() : [],
+        rRes.ok ? rRes.json() : [],
+      ]);
 
-  // --- 4 APPROVED REQUESTS ---
-  {
-    id: "VER-104",
-    name: "Bilal Hassan",
-    email: "bilal.hassan@gmail.com",
-    phone: "+92 301 2345678",
-    subject: "CHEMISTRY",
-    degree: "MPhil Chemistry",
-    institution: "University of Karachi",
-    experience: "8 Years",
-    hourlyRate: "$22/hr",
-    bio: "Experienced chemistry teacher specializing in organic chemistry, physical chemistry, and preparation for board and O/A Level examinations.",
-    appliedTime: "APPROVED 3 DAYS AGO",
-    status: "Approved",
-    avatar:
-      "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&auto=format&fit=crop&q=80",
-    documents: [
-      {
-        id: 1,
-        title: "CNIC",
-        type: "image",
-        url: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=400&auto=format&fit=crop&q=80"
-      },
-      {
-        id: 2,
-        title: "MPHIL DEGREE",
-        type: "image",
-        url: "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=400&auto=format&fit=crop&q=80"
-      }
-    ]
-  },
+      setCounts({
+        Pending: Array.isArray(p) ? p.length : 0,
+        Approved: Array.isArray(a) ? a.length : 0,
+        Rejected: Array.isArray(r) ? r.length : 0,
+      });
+    } catch (err) {
+      console.error("Failed to fetch counts:", err);
+    }
+  };
 
-  {
-    id: "VER-105",
-    name: "Hira Fatima",
-    email: "hira.fatima@gmail.com",
-    phone: "+92 322 4567812",
-    subject: "BIOLOGY",
-    degree: "MS Biotechnology",
-    institution: "University of Karachi",
-    experience: "4 Years",
-    hourlyRate: "$16/hr",
-    bio: "Biology and biotechnology tutor focusing on genetics, cell biology, molecular biology, and intermediate-level science.",
-    appliedTime: "APPROVED 4 DAYS AGO",
-    status: "Approved",
-    avatar:
-      "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80",
-    documents: [
-      {
-        id: 1,
-        title: "CNIC FRONT",
-        type: "image",
-        url: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=400&auto=format&fit=crop&q=80"
-      },
-      {
-        id: 2,
-        title: "MS DEGREE.PDF",
-        type: "pdf",
-        fileName: "MS_BIOTECHNOLOGY_DEGREE.PDF"
-      }
-    ]
-  },
+  // ============================================================
+  // FETCH ACTIVE LIST
+  // ============================================================
+  const fetchRequests = async () => {
+    setIsLoading(true);
+    try {
+      const backendStatus = activeTab.toUpperCase();
+      const res = await adminFetch(
+        `/api/admin/verifications?status=${backendStatus}`,
+      );
+      if (!res.ok) throw new Error("Failed to fetch verifications");
+      const data = await res.json();
+      setRequests(data.map(mapFromBackend));
+    } catch (err) {
+      console.error("Error fetching verifications:", err);
+      setRequests([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  {
-    id: "VER-106",
-    name: "Usman Raza",
-    email: "usman.raza@gmail.com",
-    phone: "+92 312 5678934",
-    subject: "ENGLISH",
-    degree: "MA English Literature",
-    institution: "University of Karachi",
-    experience: "7 Years",
-    hourlyRate: "$15/hr",
-    bio: "English language and literature tutor specializing in grammar, academic writing, essay writing, and examination preparation.",
-    appliedTime: "APPROVED 1 WEEK AGO",
-    status: "Approved",
-    avatar:
-      "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80",
-    documents: [
-      {
-        id: 1,
-        title: "CNIC",
-        type: "image",
-        url: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=400&auto=format&fit=crop&q=80"
-      },
-      {
-        id: 2,
-        title: "MA DEGREE",
-        type: "image",
-        url: "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=400&auto=format&fit=crop&q=80"
-      }
-    ]
-  },
+  useEffect(() => {
+    fetchRequests();
+    setActiveRejectId(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
-  {
-    id: "VER-107",
-    name: "Maham Tariq",
-    email: "maham.tariq@gmail.com",
-    phone: "+92 315 3456789",
-    subject: "STATISTICS",
-    degree: "MS Statistics",
-    institution: "University of the Punjab",
-    experience: "5 Years",
-    hourlyRate: "$19/hr",
-    bio: "Statistics instructor teaching probability, statistical analysis, research methods, SPSS, and introductory data analysis.",
-    appliedTime: "APPROVED 1 WEEK AGO",
-    status: "Approved",
-    avatar:
-      "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?w=150&auto=format&fit=crop&q=80",
-    documents: [
-      {
-        id: 1,
-        title: "CNIC",
-        type: "image",
-        url: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=400&auto=format&fit=crop&q=80"
-      },
-      {
-        id: 2,
-        title: "MS TRANSCRIPT.PDF",
-        type: "pdf",
-        fileName: "MS_STATISTICS_TRANSCRIPT.PDF"
-      }
-    ]
-  },
+  useEffect(() => {
+    fetchCounts();
+    const interval = setInterval(fetchCounts, 60000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // --- 1 REJECTED REQUEST ---
-  {
-    id: "VER-108",
-    name: "Ahmed Saad",
-    email: "ahmed.saad@gmail.com",
-    phone: "+92 300 8923456",
-    subject: "ECONOMICS",
-    degree: "BS Economics",
-    institution: "Institute of Business Administration",
-    experience: "2 Years",
-    hourlyRate: "$14/hr",
-    bio: "Economics graduate with experience teaching microeconomics, macroeconomics, business mathematics, and introductory finance.",
-    appliedTime: "REJECTED 2 DAYS AGO",
-    status: "Rejected",
-    rejectionReason:
-      "Degree certificate could not be verified. The submitted document was incomplete and unreadable.",
-    avatar:
-      "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80",
-    documents: [
-      {
-        id: 1,
-        title: "CNIC",
-        type: "image",
-        url: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=400&auto=format&fit=crop&q=80"
-      },
-      {
-        id: 2,
-        title: "UNCLEAR DEGREE CERTIFICATE",
-        type: "image",
-        url: "https://images.unsplash.com/photo-1450101499163-c8848c66ca85?w=400&auto=format&fit=crop&q=80"
-      }
-    ]
-  }
-]);
+  // ============================================================
+  // PROCESSING HELPERS
+  // ============================================================
+  const markProcessing = (id) => {
+    setProcessingIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  };
 
-  // Actions Handling
+  const unmarkProcessing = (id) => {
+    setProcessingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  };
+
+  // ============================================================
+  // APPROVE
+  // ============================================================
   const handleApprove = (id, name) => {
     setConfirmModal({
       isOpen: true,
       title: "Approve Tutor Application",
       message: `Are you sure you want to approve ${name} as a verified tutor on TUTR?`,
-      action: () => {
-        setRequests(prev => prev.map(req => req.id === id ? { ...req, status: 'Approved' } : req));
-        setActiveRejectId(null);
-        setConfirmModal({ isOpen: false, title: '', message: '', action: null });
-      }
+      action: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        markProcessing(id);
+        try {
+          const res = await adminFetch(
+            `/api/admin/verifications/${id}/decide`,
+            {
+              method: "POST",
+              body: JSON.stringify({ status: "APPROVED" }),
+            },
+          );
+          if (!res.ok) throw new Error("Approve failed");
+          await fetchRequests();
+          await fetchCounts();
+        } catch (err) {
+          console.error("Approve failed:", err);
+          alert("Failed to approve. Please try again.");
+        } finally {
+          unmarkProcessing(id);
+        }
+      },
     });
   };
 
+  // ============================================================
+  // REJECT
+  // ============================================================
   const handleFinalRejectSubmit = (id, name) => {
     const reason = rejectionReasons[id];
-    if (!reason || reason.trim() === '') {
-      alert("Please provide a rejection reason before confirming.");
+    const ban = permanentBanFlags[id] === true;
+
+    if (!reason || reason.trim().length < 10) {
+      alert("Please provide at least 10 characters of rejection reason.");
       return;
     }
 
+    const message = ban
+      ? `You are about to PERMANENTLY BAN ${name} for fraudulent documents. This cannot be undone.`
+      : `Are you sure you want to reject ${name}'s application? They can re-upload documents. Reason: "${reason}"`;
+
     setConfirmModal({
       isOpen: true,
-      title: "Reject Tutor Application",
-      message: `Are you sure you want to reject ${name}'s application? Reason: "${reason}"`,
-      action: () => {
-        setRequests(prev => prev.map(req => req.id === id ? { ...req, status: 'Rejected', rejectionReason: reason } : req));
-        setActiveRejectId(null);
-        setConfirmModal({ isOpen: false, title: '', message: '', action: null });
-      }
+      title: ban ? "Permanently Ban Tutor" : "Reject Tutor Application",
+      message,
+      action: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        markProcessing(id);
+        try {
+          const res = await adminFetch(
+            `/api/admin/verifications/${id}/decide`,
+            {
+              method: "POST",
+              body: JSON.stringify({
+                status: "REJECTED",
+                rejectionReason: reason.trim(),
+                permanentBan: ban,
+              }),
+            },
+          );
+          if (!res.ok) throw new Error("Reject failed");
+          setActiveRejectId(null);
+          setRejectionReasons((prev) => ({ ...prev, [id]: "" }));
+          setPermanentBanFlags((prev) => ({ ...prev, [id]: false }));
+          await fetchRequests();
+          await fetchCounts();
+        } catch (err) {
+          console.error("Reject failed:", err);
+          alert("Failed to reject. Please try again.");
+        } finally {
+          unmarkProcessing(id);
+        }
+      },
     });
   };
 
   const handleReasonChange = (id, text) => {
-    setRejectionReasons(prev => ({ ...prev, [id]: text }));
+    setRejectionReasons((prev) => ({ ...prev, [id]: text }));
+  };
+
+  const handleBanFlagChange = (id, value) => {
+    setPermanentBanFlags((prev) => ({ ...prev, [id]: value }));
   };
 
   const handleCancelReject = (id) => {
     setActiveRejectId(null);
-    setRejectionReasons(prev => ({ ...prev, [id]: '' }));
+    setRejectionReasons((prev) => ({ ...prev, [id]: "" }));
+    setPermanentBanFlags((prev) => ({ ...prev, [id]: false }));
   };
 
-  // Filtered lists
-  const filteredRequests = requests.filter(req => {
-    const matchesTab = req.status === activeTab;
-    const matchesSearch = req.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          req.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          req.degree.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesTab && matchesSearch;
+  // ============================================================
+  // FILTERS
+  // ============================================================
+  const filteredRequests = requests.filter((req) => {
+    const q = searchQuery.toLowerCase();
+    return (
+      req.name.toLowerCase().includes(q) ||
+      req.email.toLowerCase().includes(q) ||
+      req.phone.toLowerCase().includes(q)
+    );
   });
 
-  const counts = {
-    Pending: requests.filter(r => r.status === 'Pending').length,
-    Approved: requests.filter(r => r.status === 'Approved').length,
-    Rejected: requests.filter(r => r.status === 'Rejected').length,
-  };
-
-  // Generate PDF Report
+  // ============================================================
+  // PDF EXPORT
+  // ============================================================
   const handleExportPDF = () => {
     const doc = new jsPDF();
     doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text('TUTR - Verification Requests Report', 14, 15);
+    doc.setFont("helvetica", "bold");
+    doc.text("TUTR - Verification Requests Report", 14, 15);
 
     doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Status View: ${activeTab} | Generated: ${new Date().toLocaleDateString()}`, 14, 22);
+    doc.setFont("helvetica", "normal");
+    doc.text(
+      `Status View: ${activeTab} | Generated: ${new Date().toLocaleDateString()}`,
+      14,
+      22,
+    );
 
-    const tableHeaders = [["ID", "Name", "Subject", "Degree", "Applied Time", "Status"]];
-    const tableRows = filteredRequests.map(r => [
+    const tableHeaders = [
+      ["ID", "Name", "Email", "Phone", "Applied", "Status"],
+    ];
+    const tableRows = filteredRequests.map((r) => [
       r.id,
       r.name,
-      r.subject,
-      r.degree,
+      r.email,
+      r.phone,
       r.appliedTime,
-      r.status
+      r.status,
     ]);
 
     autoTable(doc, {
       startY: 28,
       head: tableHeaders,
       body: tableRows,
-      theme: 'grid',
-      headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] }
+      theme: "grid",
+      headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] },
     });
 
     doc.save(`Verification_Requests_${activeTab}.pdf`);
   };
 
-  // If notifications view is active, render that page instead of the main dashboard
-  if (viewState === 'notifications') {
-    return <NotificationsPage onBack={() => setViewState('dashboard')} />;
+  if (viewState === "notifications") {
+    return <NotificationsPage onBack={() => setViewState("dashboard")} />;
   }
 
   return (
     <div className="flex h-screen bg-[#F8F9FB] font-sans text-gray-900 overflow-hidden relative">
-      
-      {/* Sidebar */}
       <Sidebar onGenerateReport={handleExportPDF} />
 
-      {/* Main Container */}
       <main className="flex-1 flex flex-col overflow-y-auto">
-
-        {/* Reusable Navbar Component */}
-        <Navbar 
+        <Navbar
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           viewState={viewState}
           setViewState={setViewState}
-          placeholder="Search tutors or applications..."
+          placeholder="Search tutors by name, email, or phone..."
         />
 
-        {/* Content Body */}
         <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
-          
-          {/* Section Header & Tab Bar */}
+          {/* Header */}
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Verification Requests</h2>
-              <p className="text-xs text-gray-500 mt-1">Review tutor credentials and identity documents for platform approval.</p>
+              <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
+                Verification Requests
+              </h2>
+              <p className="text-xs text-gray-500 mt-1">
+                Review tutor credentials and identity documents for platform
+                approval.
+              </p>
             </div>
 
-            {/* Filter Pill Tabs */}
             <div className="bg-gray-200/70 p-1 rounded-2xl flex items-center text-xs font-semibold">
-              <button
-                onClick={() => {
-                  setActiveTab('Pending');
-                  setActiveRejectId(null);
-                }}
-                className={`px-5 py-2 rounded-xl transition-all cursor-pointer ${
-                  activeTab === 'Pending'
-                    ? 'bg-white text-black shadow-xs font-bold'
-                    : 'text-gray-500 hover:text-black'
-                }`}
-              >
-                Pending ({counts.Pending})
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('Approved');
-                  setActiveRejectId(null);
-                }}
-                className={`px-5 py-2 rounded-xl transition-all cursor-pointer ${
-                  activeTab === 'Approved'
-                    ? 'bg-white text-black shadow-xs font-bold'
-                    : 'text-gray-500 hover:text-black'
-                }`}
-              >
-                Approved ({counts.Approved})
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('Rejected');
-                  setActiveRejectId(null);
-                }}
-                className={`px-5 py-2 rounded-xl transition-all cursor-pointer ${
-                  activeTab === 'Rejected'
-                    ? 'bg-white text-black shadow-xs font-bold'
-                    : 'text-gray-500 hover:text-black'
-                }`}
-              >
-                Rejected ({counts.Rejected})
-              </button>
+              {["Pending", "Approved", "Rejected"].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-5 py-2 rounded-xl transition-all cursor-pointer ${
+                    activeTab === tab
+                      ? "bg-white text-black shadow-xs font-bold"
+                      : "text-gray-500 hover:text-black"
+                  }`}
+                >
+                  {tab} ({counts[tab]})
+                </button>
+              ))}
             </div>
           </div>
 
           {/* Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-            {filteredRequests.length > 0 ? (
-              filteredRequests.map((item) => (
-                <div 
-                  key={item.id}
-                  className="bg-white rounded-3xl p-6 border border-gray-100 shadow-xs flex flex-col justify-between space-y-6 transition-all"
-                >
-                  {/* Card Top Header */}
-                  <div>
-                    <div className="flex items-center justify-between">
-                      {/* Clicking Name/Avatar triggers user modal */}
-                      <div 
-                        onClick={() => setSelectedUser(item)}
-                        className="flex items-center gap-3 cursor-pointer group"
-                      >
-                        <img src={item.avatar} alt={item.name} className="w-12 h-12 rounded-2xl object-cover group-hover:opacity-90 transition-opacity" />
-                        <div>
-                          <h3 className="text-base font-bold text-gray-900 group-hover:underline transition-all flex items-center gap-1.5">
-                            {item.name}
-                            <svg className="w-3.5 h-3.5 text-gray-400 group-hover:text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-                          </h3>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="bg-indigo-50 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wide">
-                              {item.subject}
-                            </span>
-                            <span className="text-[11px] text-gray-400">• {item.degree}</span>
-                          </div>
+          {isLoading ? (
+            <div className="col-span-2 bg-white rounded-3xl p-12 text-center text-xs text-gray-400 border border-gray-100">
+              Loading verification requests...
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+              {filteredRequests.length > 0 ? (
+                filteredRequests.map((item) => {
+                  const isProcessing = processingIds.has(item.id);
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`relative bg-white rounded-3xl p-6 border border-gray-100 shadow-xs flex flex-col justify-between space-y-6 transition-all ${
+                        isProcessing ? "opacity-60 pointer-events-none" : ""
+                      }`}
+                    >
+                      {isProcessing && (
+                        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/70 backdrop-blur-xs rounded-3xl">
+                          <Spinner className="w-6 h-6 text-gray-900" />
+                          <p className="text-[10px] font-bold text-gray-600 uppercase tracking-wider mt-2">
+                            Processing...
+                          </p>
                         </div>
-                      </div>
+                      )}
 
-                      <span className="text-[10px] font-extrabold bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full uppercase tracking-wider">
-                        {item.appliedTime}
-                      </span>
-                    </div>
-
-                    {/* Document Previews Container */}
-                    <div className="mt-6">
-                      <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 mb-3">
-                        VERIFICATION DOCUMENTS
-                      </h4>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                        {item.documents.map((doc) => {
-                          if (doc.type === 'image') {
-                            return (
-                              <div
-                                key={doc.id}
-                                onClick={() => setViewingDocument(doc)}
-                                className="relative group h-24 rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 cursor-pointer"
-                              >
-                                <img src={doc.url} alt={doc.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" />
-                                <div className="absolute inset-0 bg-black/30 group-hover:bg-black/40 transition-colors"></div>
-                                <span className="absolute bottom-2 left-2 right-2 text-[9px] font-bold text-white uppercase tracking-wider truncate drop-shadow-xs">
-                                  {doc.title}
-                                </span>
-                              </div>
-                            );
-                          }
-
-                          if (doc.type === 'pdf') {
-                            return (
-                              <div
-                                key={doc.id}
-                                onClick={() => setViewingDocument(doc)}
-                                className="h-24 rounded-2xl bg-gray-100 border border-gray-200 p-3 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-gray-200/70 transition-colors"
-                              >
-                                <div className="w-7 h-7 rounded-lg bg-gray-200 border border-gray-300 flex items-center justify-center mb-1 text-gray-600">
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V7.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 1H7a2 2 0 00-2 2v16a2 2 0 002 2z"/></svg>
-                                </div>
-                                <span className="text-[9px] font-bold text-gray-600 uppercase tracking-wider truncate w-full">
-                                  {doc.fileName}
-                                </span>
-                              </div>
-                            );
-                          }
-
-                          // Missing Certificate Slot
-                          return (
-                            <div 
-                              key={doc.id}
-                              className="h-24 rounded-2xl border-2 border-dashed border-gray-200 p-3 flex flex-col items-center justify-center text-center bg-gray-50/50"
-                            >
-                              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider leading-relaxed px-1">
-                                {doc.title}
-                              </span>
+                      <div>
+                        {/* Card Header */}
+                        <div className="flex items-center justify-between">
+                          <div
+                            onClick={() =>
+                              !isProcessing && setSelectedUser(item)
+                            }
+                            className="flex items-center gap-3 cursor-pointer group"
+                          >
+                            <img
+                              src={getAvatarSrc(item.avatar, item.name)}
+                              alt={item.name}
+                              className="w-12 h-12 rounded-2xl object-cover group-hover:opacity-90 transition-opacity"
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src = getAvatarSrc("", item.name);
+                              }}
+                            />
+                            <div>
+                              <h3 className="text-base font-bold text-gray-900 group-hover:underline flex items-center gap-1.5">
+                                {item.name}
+                              </h3>
+                              <p className="text-[10px] text-gray-400 truncate max-w-[200px]">
+                                {item.email}
+                              </p>
                             </div>
-                          );
-                        })}
+                          </div>
+
+                          <span className="text-[10px] font-extrabold bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                            {item.appliedTime}
+                          </span>
+                        </div>
+
+                        {/* Documents */}
+                        <div className="mt-6">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-gray-400">
+                              VERIFICATION DOCUMENTS
+                            </h4>
+                            {item.resubmissionCount > 0 && (
+                              <span className="text-[9px] font-extrabold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                🔄 Re-submission #{item.resubmissionCount}
+                              </span>
+                            )}
+                          </div>
+                          {item.documents.length === 0 ? (
+                            <div className="h-24 rounded-2xl border-2 border-dashed border-gray-200 flex items-center justify-center text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                              No documents uploaded
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 gap-3">
+                              {item.documents.map((doc) => (
+                                <div
+                                  key={doc.id}
+                                  onClick={() => setViewingDocument(doc)}
+                                  className="relative group h-24 rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 cursor-pointer"
+                                >
+                                  <img
+                                    src={doc.url}
+                                    alt={doc.title}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                                    onError={(e) => {
+                                      e.target.style.display = "none";
+                                    }}
+                                  />
+                                  <div className="absolute inset-0 bg-black/30 group-hover:bg-black/40 transition-colors"></div>
+                                  <span className="absolute bottom-2 left-2 right-2 text-[9px] font-bold text-white uppercase tracking-wider truncate drop-shadow-xs">
+                                    {doc.title}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* ✅ Rejection reason — shown on the Rejected tab */}
+                        {activeTab === "Rejected" && item.rejectionReason && (
+                          <div className="mt-5 p-3.5 bg-red-50 border border-red-100 rounded-2xl">
+                            <p className="text-[10px] font-extrabold uppercase tracking-wider text-red-700 mb-1.5">
+                              Reason for Rejection
+                            </p>
+                            <p className="text-[11px] text-red-700 leading-relaxed">
+                              {item.rejectionReason}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Reject form (pending tab only) */}
+                        {activeTab === "Pending" &&
+                          activeRejectId === item.id && (
+                            <div className="mt-5 space-y-3 animate-in fade-in duration-200">
+                              <textarea
+                                rows="3"
+                                placeholder="Add rejection reason (min 10 characters, required)..."
+                                value={rejectionReasons[item.id] || ""}
+                                onChange={(e) =>
+                                  handleReasonChange(item.id, e.target.value)
+                                }
+                                className="w-full bg-[#F8F9FB] rounded-2xl p-4 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-gray-300 resize-none placeholder-gray-400 text-gray-800"
+                                autoFocus
+                              />
+
+                              <label className="flex items-start gap-2 bg-red-50 border border-red-100 rounded-2xl p-3 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={permanentBanFlags[item.id] === true}
+                                  onChange={(e) =>
+                                    handleBanFlagChange(
+                                      item.id,
+                                      e.target.checked,
+                                    )
+                                  }
+                                  className="mt-0.5 accent-red-600"
+                                />
+                                <div>
+                                  <p className="text-[11px] font-bold text-red-700 uppercase tracking-wider">
+                                    Permanently Ban This Tutor
+                                  </p>
+                                  <p className="text-[10px] text-red-600 mt-0.5 leading-relaxed">
+                                    Use only for fraudulent or forged documents.
+                                    The tutor will be permanently blocked from
+                                    logging in and re-registering.
+                                  </p>
+                                </div>
+                              </label>
+                            </div>
+                          )}
+                      </div>
+
+                      {/* Card Bottom Buttons */}
+                      <div className="pt-2">
+                        {activeTab === "Pending" ? (
+                          activeRejectId === item.id ? (
+                            <div className="grid grid-cols-2 gap-3">
+                              <button
+                                onClick={() => handleCancelReject(item.id)}
+                                disabled={isProcessing}
+                                className="py-3 bg-gray-100 text-gray-700 text-xs font-bold rounded-xl hover:bg-gray-200 transition-colors cursor-pointer uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                CANCEL
+                              </button>
+                              <button
+                                onClick={() =>
+                                  handleFinalRejectSubmit(item.id, item.name)
+                                }
+                                disabled={isProcessing}
+                                className={`py-3 text-xs font-bold rounded-xl transition-colors cursor-pointer uppercase tracking-wider text-white flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                                  permanentBanFlags[item.id]
+                                    ? "bg-red-700 hover:bg-red-800"
+                                    : "bg-red-600 hover:bg-red-700"
+                                }`}
+                              >
+                                {isProcessing ? (
+                                  <>
+                                    <Spinner className="w-3.5 h-3.5" />
+                                    <span>Rejecting...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    {permanentBanFlags[item.id]
+                                      ? "PERMANENTLY BAN"
+                                      : "REJECT"}
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 gap-3">
+                              <button
+                                onClick={() =>
+                                  handleApprove(item.id, item.name)
+                                }
+                                disabled={isProcessing}
+                                className="py-3 bg-black text-white text-xs font-bold rounded-xl hover:bg-zinc-800 transition-colors cursor-pointer uppercase tracking-wider flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {isProcessing ? (
+                                  <>
+                                    <Spinner className="w-3.5 h-3.5" />
+                                    <span>Approving...</span>
+                                  </>
+                                ) : (
+                                  "APPROVE TUTOR"
+                                )}
+                              </button>
+                              <button
+                                onClick={() => setActiveRejectId(item.id)}
+                                disabled={isProcessing}
+                                className="py-3 bg-white border border-red-200 text-red-600 text-xs font-bold rounded-xl hover:bg-red-50 transition-colors cursor-pointer uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                REJECT APPLICATION
+                              </button>
+                            </div>
+                          )
+                        ) : (
+                          <div className="flex items-center justify-between text-xs px-2 py-1">
+                            <span className="text-gray-400 font-semibold">
+                              Status:
+                            </span>
+                            <span
+                              className={`font-bold ${
+                                activeTab === "Approved"
+                                  ? "text-emerald-600"
+                                  : "text-red-600"
+                              }`}
+                            >
+                              {item.status.toUpperCase()}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
-
-                    {/* DYNAMIC REJECTION TEXTAREA: Reveals when REJECT APPLICATION is clicked */}
-                    {activeTab === 'Pending' && activeRejectId === item.id && (
-                      <div className="mt-5 animate-in fade-in duration-200">
-                        <textarea
-                          rows="3"
-                          placeholder="Add rejection reason (required for rejection)..."
-                          value={rejectionReasons[item.id] || ''}
-                          onChange={(e) => handleReasonChange(item.id, e.target.value)}
-                          className="w-full bg-[#F8F9FB] rounded-2xl p-4 text-xs border border-gray-200 focus:outline-none focus:ring-1 focus:ring-gray-300 resize-none placeholder-gray-400 text-gray-800"
-                          autoFocus
-                        />
-                      </div>
-                    )}
-
-                    {/* Rejection reason display for already Rejected cards */}
-                    {activeTab === 'Rejected' && item.rejectionReason && (
-                      <div className="mt-4 p-3 bg-red-50 border border-red-100 rounded-2xl text-xs text-red-700">
-                        <p className="font-bold text-[10px] uppercase tracking-wider mb-1">Reason for Rejection:</p>
-                        <p>{item.rejectionReason}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Card Bottom Buttons */}
-                  <div className="pt-2">
-                    {activeTab === 'Pending' ? (
-                      activeRejectId === item.id ? (
-                        /* Buttons when Rejection Mode is Active for this card */
-                        <div className="grid grid-cols-2 gap-3">
-                          <button 
-                            onClick={() => handleCancelReject(item.id)}
-                            className="py-3 bg-gray-100 text-gray-700 text-xs font-bold rounded-xl hover:bg-gray-200 transition-colors cursor-pointer uppercase tracking-wider"
-                          >
-                            CANCEL
-                          </button>
-                          <button 
-                            onClick={() => handleFinalRejectSubmit(item.id, item.name)}
-                            className="py-3 bg-white border border-red-200 text-red-600 text-xs font-bold rounded-xl hover:bg-red-50 transition-colors cursor-pointer uppercase tracking-wider"
-                          >
-                            REJECT
-                          </button>
-                        </div>
-                      ) : (
-                        /* Default Action Buttons */
-                        <div className="grid grid-cols-2 gap-3">
-                          <button 
-                            onClick={() => handleApprove(item.id, item.name)}
-                            className="py-3 bg-black text-white text-xs font-bold rounded-xl hover:bg-zinc-800 transition-colors cursor-pointer uppercase tracking-wider"
-                          >
-                            APPROVE TUTOR
-                          </button>
-                          <button 
-                            onClick={() => setActiveRejectId(item.id)}
-                            className="py-3 bg-white border border-red-200 text-red-600 text-xs font-bold rounded-xl hover:bg-red-50 transition-colors cursor-pointer uppercase tracking-wider"
-                          >
-                            REJECT APPLICATION
-                          </button>
-                        </div>
-                      )
-                    ) : (
-                      <div className="flex items-center justify-between text-xs px-2 py-1">
-                        <span className="text-gray-400 font-semibold">Status:</span>
-                        <span className={`font-bold ${activeTab === 'Approved' ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {item.status.toUpperCase()}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
+                  );
+                })
+              ) : (
+                <div className="col-span-2 bg-white rounded-3xl p-12 text-center text-xs text-gray-400 border border-gray-100">
+                  No verification requests found in state "{activeTab}".
                 </div>
-              ))
-            ) : (
-              <div className="col-span-2 bg-white rounded-3xl p-12 text-center text-xs text-gray-400 border border-gray-100">
-                No verification requests found in state "{activeTab}".
-              </div>
-            )}
-          </div>
-
+              )}
+            </div>
+          )}
         </div>
       </main>
 
-      {/* ---------------- TUTOR DETAILS MODAL ---------------- */}
+      {/* Tutor Details Modal */}
       {selectedUser && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl relative border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
-            {/* Close Button */}
-            <button 
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl relative border border-gray-100 max-h-[90vh] overflow-y-auto">
+            <button
               onClick={() => setSelectedUser(null)}
               className="absolute top-5 right-5 text-gray-400 hover:text-black cursor-pointer"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              ✕
             </button>
 
-            {/* Profile Summary Header */}
             <div className="flex items-center gap-4 border-b border-gray-100 pb-5">
-              <img src={selectedUser.avatar} alt={selectedUser.name} className="w-16 h-16 rounded-2xl object-cover border border-gray-100" />
+              <img
+                src={getAvatarSrc(selectedUser.avatar, selectedUser.name)}
+                alt={selectedUser.name}
+                className="w-16 h-16 rounded-2xl object-cover border border-gray-100"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = getAvatarSrc("", selectedUser.name);
+                }}
+              />
               <div>
-                <h3 className="text-lg font-bold text-gray-900">{selectedUser.name}</h3>
-                <p className="text-xs text-gray-500 font-medium">{selectedUser.degree}</p>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className="bg-indigo-50 text-indigo-700 text-[10px] font-bold px-2.5 py-0.5 rounded-md uppercase tracking-wider">
-                    {selectedUser.subject}
-                  </span>
-                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider ${
-                    selectedUser.status === 'Approved' ? 'bg-emerald-50 text-emerald-700' :
-                    selectedUser.status === 'Rejected' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'
-                  }`}>
+                <h3 className="text-lg font-bold text-gray-900">
+                  {selectedUser.name}
+                </h3>
+                <div className="mt-2">
+                  <span
+                    className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                      selectedUser.status === "Approved"
+                        ? "bg-emerald-50 text-emerald-700"
+                        : selectedUser.status === "Rejected"
+                          ? "bg-red-50 text-red-700"
+                          : "bg-amber-50 text-amber-700"
+                    }`}
+                  >
                     {selectedUser.status}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Detailed Info Grid */}
             <div className="py-5 space-y-4 text-xs">
+              {selectedUser.bio && (
+                <div className="bg-gray-50 p-3.5 rounded-2xl border border-gray-100">
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">
+                    Headline
+                  </span>
+                  <p className="text-gray-600 leading-relaxed">
+                    {selectedUser.bio}
+                  </p>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="bg-gray-50 p-3 rounded-2xl border border-gray-100">
-                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-0.5">Email</span>
-                  <span className="font-semibold text-gray-800 break-all">{selectedUser.email || 'N/A'}</span>
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-0.5">
+                    Email
+                  </span>
+                  <span className="font-semibold text-gray-800 break-all">
+                    {selectedUser.email || "N/A"}
+                  </span>
                 </div>
                 <div className="bg-gray-50 p-3 rounded-2xl border border-gray-100">
-                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-0.5">Phone</span>
-                  <span className="font-semibold text-gray-800">{selectedUser.phone || 'N/A'}</span>
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-0.5">
+                    Phone
+                  </span>
+                  <span className="font-semibold text-gray-800">
+                    {selectedUser.phone || "N/A"}
+                  </span>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="bg-gray-50 p-3 rounded-2xl border border-gray-100">
-                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-0.5">Experience</span>
-                  <span className="font-semibold text-gray-800">{selectedUser.experience || '3+ Years'}</span>
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-0.5">
+                    Gender
+                  </span>
+                  <span className="font-semibold text-gray-800">
+                    {selectedUser.gender || "N/A"}
+                  </span>
                 </div>
                 <div className="bg-gray-50 p-3 rounded-2xl border border-gray-100">
-                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-0.5">Hourly Rate</span>
-                  <span className="font-semibold text-gray-800">{selectedUser.hourlyRate || '$40/hr'}</span>
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-0.5">
+                    Date of Birth
+                  </span>
+                  <span className="font-semibold text-gray-800">
+                    {selectedUser.dateOfBirth || "N/A"}
+                  </span>
                 </div>
               </div>
 
-              <div className="bg-gray-50 p-3.5 rounded-2xl border border-gray-100">
-                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-1">Biography</span>
-                <p className="text-gray-600 leading-relaxed">{selectedUser.bio || 'No bio provided.'}</p>
+              <div className="bg-gray-50 p-3 rounded-2xl border border-gray-100 space-y-2">
+                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">
+                  Education
+                </span>
+                <div>
+                  <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-0.5">
+                    University
+                  </span>
+                  <p className="font-semibold text-gray-800">
+                    {selectedUser.institution || "N/A"}
+                  </p>
+                </div>
+                <div className="border-t border-gray-200 pt-2">
+                  <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider block mb-0.5">
+                    College
+                  </span>
+                  <p className="font-semibold text-gray-800">
+                    {selectedUser.highSchool || "N/A"}
+                  </p>
+                </div>
               </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-gray-50 p-3 rounded-2xl border border-gray-100">
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-0.5">
+                    Work Experience
+                  </span>
+                  <span className="font-semibold text-gray-800">
+                    {selectedUser.experience || "N/A"}
+                  </span>
+                </div>
+                <div className="bg-gray-50 p-3 rounded-2xl border border-gray-100">
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block mb-0.5">
+                    Location
+                  </span>
+                  <span className="font-semibold text-gray-800">
+                    {selectedUser.location || "N/A"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Rejection reason in modal too */}
+              {selectedUser.rejectionReason && (
+                <div className="bg-red-50 p-3 rounded-2xl border border-red-100">
+                  <span className="text-[10px] text-red-700 font-bold uppercase tracking-wider block mb-1">
+                    Reason for Rejection
+                  </span>
+                  <p className="text-red-700 leading-relaxed">
+                    {selectedUser.rejectionReason}
+                  </p>
+                </div>
+              )}
             </div>
 
-            {/* Modal Footer */}
             <div className="pt-2 flex justify-end">
               <button
                 onClick={() => setSelectedUser(null)}
@@ -715,49 +830,72 @@ const VerificationRequests = () => {
         </div>
       )}
 
-      {/* ---------------- DOCUMENT VIEWER MODAL ---------------- */}
+      {/* Document Viewer Modal */}
       {viewingDocument && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl relative border border-gray-100">
-            <button 
+            <button
               onClick={() => setViewingDocument(null)}
               className="absolute top-4 right-4 text-gray-400 hover:text-black cursor-pointer"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              ✕
             </button>
             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">
-              {viewingDocument.title || viewingDocument.fileName}
+              {viewingDocument.title}
             </h3>
-            {viewingDocument.type === 'image' ? (
-              <img src={viewingDocument.url} alt="Document" className="w-full h-80 object-contain rounded-2xl bg-gray-50 border border-gray-100" />
-            ) : (
-              <div className="w-full h-80 rounded-2xl bg-gray-50 border border-gray-100 flex flex-col items-center justify-center p-6 text-center">
-                <svg className="w-12 h-12 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                <p className="text-xs font-bold text-gray-700">{viewingDocument.fileName}</p>
-                <p className="text-[10px] text-gray-400 mt-1">PDF document preview ready for validation.</p>
-              </div>
-            )}
+            <img
+              src={viewingDocument.url}
+              alt="Document"
+              className="w-full h-80 object-contain rounded-2xl bg-gray-50 border border-gray-100"
+              onError={(e) => {
+                e.target.src =
+                  "https://placehold.co/600x400?text=Image+Not+Available";
+              }}
+            />
           </div>
         </div>
       )}
 
-      {/* ---------------- WHITE BACKGROUND ALERT / CONFIRM MODAL ---------------- */}
+      {/* Confirm Modal */}
       {confirmModal.isOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-gray-100 text-center animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-gray-100 text-center">
             <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <svg
+                className="w-5 h-5 text-gray-700"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
             </div>
-            <h3 className="font-bold text-sm text-gray-900 mb-1">{confirmModal.title}</h3>
-            <p className="text-xs text-gray-500 mb-5 leading-relaxed">{confirmModal.message}</p>
+            <h3 className="font-bold text-sm text-gray-900 mb-1">
+              {confirmModal.title}
+            </h3>
+            <p className="text-xs text-gray-500 mb-5 leading-relaxed">
+              {confirmModal.message}
+            </p>
             <div className="flex gap-2">
-              <button 
-                onClick={() => setConfirmModal({ isOpen: false, title: '', message: '', action: null })}
+              <button
+                onClick={() =>
+                  setConfirmModal({
+                    isOpen: false,
+                    title: "",
+                    message: "",
+                    action: null,
+                  })
+                }
                 className="flex-1 py-2 bg-gray-100 text-gray-700 font-semibold text-xs rounded-xl hover:bg-gray-200 transition-colors cursor-pointer"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={confirmModal.action}
                 className="flex-1 py-2 bg-black text-white font-semibold text-xs rounded-xl hover:bg-zinc-800 transition-colors cursor-pointer"
               >
@@ -767,7 +905,6 @@ const VerificationRequests = () => {
           </div>
         </div>
       )}
-
     </div>
   );
 };
