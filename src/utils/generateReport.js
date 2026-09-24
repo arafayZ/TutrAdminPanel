@@ -1,471 +1,556 @@
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+// src/utils/generateReport.js
+import appIcon from "../assets/app_icon1.png";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import { adminFetch, getImageUrl } from "../api/adminClient";
 
-export const generateFullAppPDF = async (navigate, setProgressText, generatedBy = 'Abdul Rafay') => {
-  if (setProgressText) setProgressText('Compiling TUTR executive report...');
+// ============================================================
+// HELPERS
+// ============================================================
 
-  const doc = new jsPDF('p', 'pt', 'a4');
+const formatDate = (dt) => {
+  if (!dt) return "—";
+  const d = new Date(dt);
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+};
+
+const getAvatarSrc = (url, name = "") => {
+  if (url && typeof url === "string" && url.trim() !== "") return url;
+  const initials = (name || "S T")
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(
+    initials,
+  )}&background=E5E7EB&color=374151&bold=true&size=128`;
+};
+
+// ============================================================
+// FETCH HELPERS
+// ============================================================
+
+const safeFetch = async (url, options = {}) => {
+  try {
+    const res = await adminFetch(url, options);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (err) {
+    console.error(`Failed to fetch ${url}:`, err);
+    return null;
+  }
+};
+
+const fetchDashboard = () => safeFetch("/api/admin/dashboard");
+
+const fetchTutors = () =>
+  safeFetch("/api/admin/tutors/filter", {
+    method: "POST",
+    body: JSON.stringify({}), // no filters = all tutors
+  });
+
+const fetchStudents = () =>
+  safeFetch("/api/admin/students/filter", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+
+const fetchCourses = () =>
+  safeFetch("/api/admin/courses/filter", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+
+const fetchReviews = () =>
+  safeFetch("/api/admin/reviews/filter", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+
+const fetchVerifications = async () => {
+  const [pending, approved, rejected] = await Promise.all([
+    safeFetch("/api/admin/verifications?status=PENDING"),
+    safeFetch("/api/admin/verifications?status=APPROVED"),
+    safeFetch("/api/admin/verifications?status=REJECTED"),
+  ]);
+  return {
+    pending: Array.isArray(pending) ? pending : [],
+    approved: Array.isArray(approved) ? approved : [],
+    rejected: Array.isArray(rejected) ? rejected : [],
+  };
+};
+
+// ============================================================
+// HELPER — Convert an image URL/import to a base64 data URL
+// (needed because jsPDF's addImage wants a data URL)
+// ============================================================
+const toBase64 = (src) =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = reject;
+    img.src = src;
+  });
+
+// ============================================================
+// PDF BUILDING BLOCKS
+// ============================================================
+
+const addCoverPage = (doc, adminName, iconDataUrl = null) => {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 40;
-  const contentWidth = pageWidth - margin * 2;
-  const timestamp = new Date().toLocaleString();
-  const reportPeriod = 'Current Real-Time State';
 
-  // --- MATHEMATICALLY CONSISTENT CORE DATA ---
-  const studentsCount = 1248;
-  const activeTutorsCount = 312;
-  const pendingTutorsCount = 45;
-  const totalRegisteredUsers = studentsCount + activeTutorsCount; // 1,560 Registered Users
-  const totalCoursesCount = 86;
-  const categoriesCount = 12;
-  const avgStudentsPerTutor = (studentsCount / activeTutorsCount).toFixed(1); // 4.0
-
-  const userComposition = [
-    { label: 'Students', count: studentsCount, pct: ((studentsCount / totalRegisteredUsers) * 100).toFixed(1), shade: [20, 20, 20] },
-    { label: 'Verified Tutors', count: activeTutorsCount, pct: ((activeTutorsCount / totalRegisteredUsers) * 100).toFixed(1), shade: [100, 100, 100] },
-  ];
-
-  const coursesData = [
-    { title: 'Full-Stack Web Development', category: 'Computer Science', tutors: '15 Tutors', enrolled: 410, status: 'Active' },
-    { title: 'Data Structures & Algorithms', category: 'Computer Science', tutors: '12 Tutors', enrolled: 340, status: 'Active' },
-    { title: 'Calculus & Linear Algebra', category: 'Mathematics', tutors: '8 Tutors', enrolled: 215, status: 'Active' },
-    { title: 'English Communication Skills', category: 'Languages', tutors: '6 Tutors', enrolled: 173, status: 'Active' },
-    { title: 'Organic Chemistry', category: 'Sciences', tutors: '5 Tutors', enrolled: 110, status: 'Active' },
-  ];
-
-  const totalDisplayedEnrollments = coursesData.reduce((sum, c) => sum + c.enrolled, 0); // 1,248 total enrollments
-
-  // --- PERSISTENT EXECUTIVE HEADER & FOOTER ---
-  const drawHeaderFooter = (pageNumber, totalPages) => {
-    // Header Bar
-    doc.setFillColor(15, 15, 15);
-    doc.rect(0, 0, pageWidth, 42, 'F');
-
-    // Header Content
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text('TUTR ADMIN CONSOLE', margin, 26);
-
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(200, 200, 200);
-    doc.text('EXECUTIVE PLATFORM REPORT', margin + 125, 26);
-
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(220, 220, 220);
-    doc.text('CONFIDENTIAL & PROPRIETARY', pageWidth - margin - 150, 26);
-
-    // Footer Dividers & Content
-    doc.setDrawColor(220, 220, 220);
-    doc.line(margin, pageHeight - 35, pageWidth - margin, pageHeight - 35);
-
-    doc.setTextColor(110, 110, 110);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Generated By: ${generatedBy}  |  Generated: ${timestamp}`, margin, pageHeight - 20);
-    doc.text(`Page ${pageNumber} of ${totalPages}`, pageWidth - margin - 60, pageHeight - 20);
-  };
-
-  // Helper Section Builder
-  const drawSectionTitle = (title, y) => {
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(15, 15, 15);
-    doc.text(title.toUpperCase(), margin, y);
-    doc.setDrawColor(210, 210, 210);
-    doc.line(margin, y + 4, pageWidth - margin, y + 4);
-    return y + 18;
-  };
-
-  // --- PAGE 1: EXECUTIVE OVERVIEW & KPI DASHBOARD ---
-  let currentY = 60;
-
-  // Title Block
-  doc.setFontSize(20);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(0, 0, 0);
-  doc.text('Executive Platform Report', margin, currentY);
-
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 100, 100);
-  doc.text('Comprehensive Operational Analysis & Metric Performance Diagnostic', margin, currentY + 14);
-
-  currentY += 28;
-
-  // Metadata Card Block
-  doc.setFillColor(248, 249, 250);
-  doc.setDrawColor(220, 224, 230);
-  doc.roundedRect(margin, currentY, contentWidth, 32, 4, 4, 'FD');
-
-  doc.setFontSize(7.5); // Slightly smaller font size to prevent overflow cleanly
-
-  // Column 1: Generator
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(50, 50, 50);
-  doc.text('REPORT GENERATOR:', margin + 10, currentY + 20);
-  doc.setFont('helvetica', 'normal');
-  doc.text(generatedBy.toUpperCase(), margin + 115, currentY + 20);
-
-  // Column 2: Reporting Period
-  doc.setFont('helvetica', 'bold');
-  doc.text('PERIOD:', margin + 210, currentY + 20);
-  doc.setFont('helvetica', 'normal');
-  doc.text(reportPeriod, margin + 252, currentY + 20);
-
-  // Column 3: Timestamp (Right-Aligned from inside the card border)
-  const timestampX = pageWidth - margin - 10;
-  doc.setFont('helvetica', 'normal');
-  doc.text(timestamp, timestampX, currentY + 20, { align: 'right' });
-
-  // Timestamp Label (Positioned right before the timestamp value)
-  const timestampWidth = doc.getTextWidth(timestamp);
-  doc.setFont('helvetica', 'bold');
-  doc.text('TIMESTAMP:', timestampX - timestampWidth - 6, currentY + 20, { align: 'right' });
-
-  currentY += 46;
-
-  // Section 1: Executive Summary
-  currentY = drawSectionTitle('1. Executive Summary', currentY);
-  doc.setFillColor(252, 252, 253);
-  doc.setDrawColor(230, 230, 230);
-  doc.roundedRect(margin, currentY, contentWidth, 52, 4, 4, 'FD');
-
-  doc.setFontSize(8.5);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(60, 60, 60);
-  const summaryText = 
-    `The TUTR Platform currently maintains an active operational base of ${studentsCount.toLocaleString()} registered students and ${activeTutorsCount} verified tutors across ${categoriesCount} distinct course categories. An additional ${pendingTutorsCount} tutor applications are queued for administrator verification. The platform demonstrates an overall system health status of 99.8% operational across core services, with Full-Stack Web Development representing the single highest-enrollment academic offering.`;
-  
-  const splitSummary = doc.splitTextToSize(summaryText, contentWidth - 24);
-  doc.text(splitSummary, margin + 12, currentY + 16);
-
-  currentY += 68;
-
-  // Section 2: KPI Metrics Dashboard (6 Grid Cards)
-  currentY = drawSectionTitle('2. Platform KPI Overview', currentY);
-
-  const kpiList = [
-    { title: 'TOTAL STUDENTS', val: studentsCount.toLocaleString(), sub: 'Active Profiles', badge: 'Active' },
-    { title: 'ACTIVE TUTORS', val: `${activeTutorsCount}`, sub: `Avg ${avgStudentsPerTutor} Stud/Tutor`, badge: 'Verified' },
-    { title: 'PENDING VERIFICATION', val: `${pendingTutorsCount}`, sub: 'Requires Review', badge: 'Action Req' },
-    { title: 'TOTAL COURSES', val: `${totalCoursesCount}`, sub: `${categoriesCount} Academic Disciplines`, badge: 'Operational' },
-    { title: 'TOTAL ENROLLMENTS', val: totalDisplayedEnrollments.toLocaleString(), sub: 'Across Top Courses', badge: 'Engaged' },
-    { title: 'SYSTEM HEALTH', val: '99.8%', sub: 'Core API & Auth Up', badge: 'Healthy' },
-  ];
-
-  const cols = 3;
-  const kpiGap = 10;
-  const cardW = (contentWidth - kpiGap * (cols - 1)) / cols;
-  const cardH = 48;
-
-  kpiList.forEach((kpi, idx) => {
-    const colIdx = idx % cols;
-    const rowIdx = Math.floor(idx / cols);
-    const x = margin + colIdx * (cardW + kpiGap);
-    const y = currentY + rowIdx * (cardH + kpiGap);
-
-    doc.setFillColor(250, 250, 250);
-    doc.setDrawColor(220, 220, 220);
-    doc.roundedRect(x, y, cardW, cardH, 4, 4, 'FD');
-
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(110, 110, 110);
-    doc.text(kpi.title, x + 10, y + 14);
-
-    doc.setFontSize(13);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(0, 0, 0);
-    doc.text(kpi.val, x + 10, y + 31);
-
-    doc.setFontSize(6.5);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(120, 120, 120);
-    doc.text(kpi.sub, x + 10, y + 42);
-
-    // Badge
-    doc.setFillColor(235, 235, 235);
-    doc.roundedRect(x + cardW - 52, y + 8, 44, 12, 2, 2, 'F');
-    doc.setFontSize(6);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(40, 40, 40);
-    doc.text(kpi.badge, x + cardW - 48, y + 16);
-  });
-
-  currentY += Math.ceil(kpiList.length / cols) * (cardH + kpiGap) + 12;
-
-  // Section 3: User Composition Analytics
-  if (setProgressText) setProgressText('Rendering user distribution charts...');
-  currentY = drawSectionTitle('3. User Distribution Analytics', currentY);
-
-  const chartBoxWidth = (contentWidth - 12) / 2;
-  const chartBoxHeight = 105;
-
-  // Box 1: Registered User Ratio Donut / Breakdown
-  doc.setFillColor(250, 250, 250);
-  doc.setDrawColor(220, 220, 220);
-  doc.roundedRect(margin, currentY, chartBoxWidth, chartBoxHeight, 4, 4, 'FD');
-
-  doc.setFontSize(8.5);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 30, 30);
-  doc.text('Registered User Breakdown (Total: 1,560)', margin + 12, currentY + 18);
-
-  userComposition.forEach((item, i) => {
-    const yPos = currentY + 42 + i * 26;
-    doc.setFillColor(...item.shade);
-    doc.circle(margin + 20, yPos - 3, 5, 'F');
-
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(40, 40, 40);
-    doc.text(`${item.label}:`, margin + 32, yPos);
-
-    doc.setFont('helvetica', 'normal');
-    doc.text(`${item.count.toLocaleString()} (${item.pct}%)`, margin + 110, yPos);
-
-    // Progress Bar Track
-    doc.setFillColor(230, 230, 230);
-    doc.roundedRect(margin + 32, yPos + 4, chartBoxWidth - 48, 4, 2, 2, 'F');
-    // Progress Bar Fill
-    doc.setFillColor(...item.shade);
-    doc.roundedRect(margin + 32, yPos + 4, (chartBoxWidth - 48) * (item.count / totalRegisteredUsers), 4, 2, 2, 'F');
-  });
-
-  // Box 2: Application Pipeline
-  const box2X = margin + chartBoxWidth + 12;
-  doc.setFillColor(250, 250, 250);
-  doc.setDrawColor(220, 220, 220);
-  doc.roundedRect(box2X, currentY, chartBoxWidth, chartBoxHeight, 4, 4, 'FD');
-
-  doc.setFontSize(8.5);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 30, 30);
-  doc.text('Tutor Verification Queue Status', box2X + 12, currentY + 18);
-
-  const pipeline = [
-    { status: 'Active Verified Tutors', count: activeTutorsCount, shade: [30, 30, 30] },
-    { status: 'Pending Application Queue', count: pendingTutorsCount, shade: [140, 140, 140] },
-  ];
-
-  pipeline.forEach((item, i) => {
-    const yPos = currentY + 42 + i * 26;
-    doc.setFillColor(...item.shade);
-    doc.rect(box2X + 15, yPos - 7, 8, 8, 'F');
-
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(40, 40, 40);
-    doc.text(item.status, box2X + 30, yPos);
-
-    doc.setFont('helvetica', 'normal');
-    doc.text(`${item.count} Profiles`, box2X + chartBoxWidth - 70, yPos);
-  });
-
-  doc.setFontSize(7.5);
-  doc.setFont('helvetica', 'italic');
-  doc.setTextColor(110, 110, 110);
-  doc.text('Note: Pending applications are processed separately from active profiles.', box2X + 12, currentY + 95);
-
-  currentY += chartBoxHeight + 15;
-
-  // Section 4: Category Popularity Bar Graph
-  currentY = drawSectionTitle('4. Category Popularity Analytics', currentY);
-
-  const categoriesData = [
-    { name: 'Computer Science', count: 42, width: 150, shade: [20, 20, 20] },
-    { name: 'Mathematics', count: 28, width: 105, shade: [70, 70, 70] },
-    { name: 'Physics & Chem', count: 18, width: 70, shade: [120, 120, 120] },
-    { name: 'Languages', count: 12, width: 45, shade: [170, 170, 170] },
-  ];
-
-  doc.setFillColor(250, 250, 250);
-  doc.setDrawColor(220, 220, 220);
-  doc.roundedRect(margin, currentY, contentWidth, 100, 4, 4, 'FD');
-
-  categoriesData.forEach((cat, idx) => {
-    const yPos = currentY + 22 + idx * 20;
-
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(50, 50, 50);
-    doc.text(cat.name, margin + 15, yPos);
-
-    // Track Fill
-    doc.setFillColor(230, 230, 230);
-    doc.roundedRect(margin + 130, yPos - 7, 300, 8, 2, 2, 'F');
-
-    // Bar Fill
-    doc.setFillColor(...cat.shade);
-    doc.roundedRect(margin + 130, yPos - 7, cat.width * 1.8, 8, 2, 2, 'F');
-
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(20, 20, 20);
-    doc.text(`${cat.count} Courses`, margin + 445, yPos);
-  });
-
-  // --- PAGE 2: COURSE ANALYTICS, AUDIT LOGS & INSIGHTS ---
-  doc.addPage();
-  currentY = 60;
-
-  // Section 5: Course Analytics & Enrollment Table
-  if (setProgressText) setProgressText('Rendering course enrollment analytics...');
-  currentY = drawSectionTitle('5. Active Courses & Enrollment Distribution', currentY);
-
-  const tableBody = coursesData.map((c) => [c.title, c.category, c.tutors, `${c.enrolled} Students`, c.status]);
-
-  autoTable(doc, {
-    startY: currentY,
-    margin: { left: margin, right: margin },
-    head: [['Course Title', 'Category', 'Assigned Tutors', 'Enrolled Students', 'Status']],
-    body: tableBody,
-    headStyles: { fillColor: [15, 15, 15], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
-    bodyStyles: { fontSize: 8, textColor: [40, 40, 40] },
-    alternateRowStyles: { fillColor: [248, 248, 248] },
-    columnStyles: {
-      0: { cellWidth: 160 },
-      1: { cellWidth: 110 },
-      2: { cellWidth: 90 },
-      3: { cellWidth: 95 },
-      4: { cellWidth: 55, fontStyle: 'bold' },
-    },
-  });
-
-  currentY = doc.lastAutoTable.finalY + 12;
-
-  // Course Insights Summary Box
-  doc.setFillColor(248, 249, 250);
-  doc.setDrawColor(220, 220, 220);
-  doc.roundedRect(margin, currentY, contentWidth, 34, 4, 4, 'FD');
-
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 30, 30);
-  doc.text('COURSE INSIGHTS:', margin + 10, currentY + 14);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(60, 60, 60);
-  doc.text(`• Highest Enrolled Course: Full-Stack Web Development (${coursesData[0].enrolled} Students)`, margin + 110, currentY + 14);
-  doc.text(`• Total Sample Enrollment: ${totalDisplayedEnrollments.toLocaleString()} Active Student Seats Covered`, margin + 110, currentY + 25);
-
-  currentY += 46;
-
-  // Section 6: Modular Analytics Grid (Tutor, Student, Reviews, System Health)
-  currentY = drawSectionTitle('6. Deep-Dive Module Analytics', currentY);
-
-  const moduleW = (contentWidth - 10) / 2;
-  const moduleH = 70;
-
-  // Tutor Module Box
-  doc.setFillColor(250, 250, 250);
-  doc.setDrawColor(220, 220, 220);
-  doc.roundedRect(margin, currentY, moduleW, moduleH, 4, 4, 'FD');
-  doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 0, 0);
-  doc.text('TUTOR ANALYTICS', margin + 10, currentY + 16);
-  doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(70, 70, 70);
-  doc.text(`• Active Verified Tutors: ${activeTutorsCount}`, margin + 10, currentY + 30);
-  doc.text(`• Applications Pending Verification: ${pendingTutorsCount}`, margin + 10, currentY + 42);
-  doc.text(`• Average Student/Tutor Ratio: ${avgStudentsPerTutor} Students / Tutor`, margin + 10, currentY + 54);
-
-  // Student Module Box
-  doc.setFillColor(250, 250, 250);
-  doc.setDrawColor(220, 220, 220);
-  doc.roundedRect(margin + moduleW + 10, currentY, moduleW, moduleH, 4, 4, 'FD');
-  doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 0, 0);
-  doc.text('STUDENT ANALYTICS', margin + moduleW + 20, currentY + 16);
-  doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(70, 70, 70);
-  doc.text(`• Total Registered Students: ${studentsCount.toLocaleString()}`, margin + moduleW + 20, currentY + 30);
-  doc.text('• Account Activity Rate: 100% Registered Profile Metric', margin + moduleW + 20, currentY + 42);
-  doc.text('• Most Demanded Field: Computer Science', margin + moduleW + 20, currentY + 54);
-
-  currentY += moduleH + 10;
-
-  // System Health Detailed Status Box
-  doc.setFillColor(250, 250, 250);
-  doc.setDrawColor(220, 220, 220);
-  doc.roundedRect(margin, currentY, contentWidth, 50, 4, 4, 'FD');
-  doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 0, 0);
-  doc.text('SYSTEM HEALTH & SERVICES OVERVIEW (99.8% OPERATIONAL)', margin + 10, currentY + 16);
-
-  const healthServices = [
-    { service: 'REST API', status: 'Operational' },
-    { service: 'Database', status: 'Operational' },
-    { service: 'Authentication', status: 'Operational' },
-    { service: 'Notifications', status: 'Operational' },
-  ];
-
-  healthServices.forEach((s, idx) => {
-    const xPos = margin + 10 + idx * 125;
-    doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(50, 50, 50);
-    doc.text(`${s.service}:`, xPos, currentY + 34);
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(0, 120, 0);
-    doc.text(` [${s.status}]`, xPos + 60, currentY + 34);
-  });
-
-  currentY += 62;
-
-  // Section 7: Key Insights & Recommendations
-  currentY = drawSectionTitle('7. Key Insights & Actionable Recommendations', currentY);
-
-  const insightsW = (contentWidth - 10) / 2;
-  const insightsH = 85;
-
-  // Insights
-  doc.setFillColor(252, 252, 253);
-  doc.setDrawColor(220, 220, 220);
-  doc.roundedRect(margin, currentY, insightsW, insightsH, 4, 4, 'FD');
-  doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 0, 0);
-  doc.text('KEY INSIGHTS', margin + 10, currentY + 16);
-  doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(60, 60, 60);
-  doc.text(`1. Platform registration ratio sits at ${userComposition[0].pct}% Students.`, margin + 10, currentY + 30);
-  doc.text('2. Computer Science commands highest course demand.', margin + 10, currentY + 42);
-  doc.text(`3. ${pendingTutorsCount} tutor applications await document review.`, margin + 10, currentY + 54);
-  doc.text('4. Overall platform uptime remains steady at 99.8%.', margin + 10, currentY + 66);
-
-  // Recommendations
-  doc.setFillColor(252, 252, 253);
-  doc.setDrawColor(220, 220, 220);
-  doc.roundedRect(margin + insightsW + 10, currentY, insightsW, insightsH, 4, 4, 'FD');
-  doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 0, 0);
-  doc.text('RECOMMENDATIONS', margin + insightsW + 20, currentY + 16);
-  doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(60, 60, 60);
-  doc.text('1. Prioritize pending tutor verification queue processing.', margin + insightsW + 20, currentY + 30);
-  doc.text('2. Onboard additional tutors for Computer Science courses.', margin + insightsW + 20, currentY + 42);
-  doc.text('3. Monitor high-capacity web development courses.', margin + insightsW + 20, currentY + 54);
-  doc.text('4. Integrate historical growth metrics tracking module.', margin + insightsW + 20, currentY + 66);
-
-  currentY += insightsH + 12;
-
-  // Section 8: Management Audit Log Table
-  if (setProgressText) setProgressText('Rendering audit log records...');
-  currentY = drawSectionTitle('8. Management Activity Audit Logs', currentY);
-
-  autoTable(doc, {
-    startY: currentY,
-    margin: { left: margin, right: margin },
-    head: [['Timestamp', 'Performed By', 'Action Executed', 'Target Module']],
-    body: [
-      ['2026-03-01 10:14', generatedBy, 'Approved New Tutor Account', 'Tutor Verification'],
-      ['2026-03-01 08:30', generatedBy, 'Added New Course: Data Structures', 'Courses Module'],
-      ['2026-02-28 16:45', generatedBy, 'Generated System Report', 'Console Audit'],
-    ],
-    headStyles: { fillColor: [220, 220, 220], textColor: [0, 0, 0], fontSize: 8, fontStyle: 'bold' },
-    bodyStyles: { fontSize: 8, textColor: [60, 60, 60] },
-    alternateRowStyles: { fillColor: [250, 250, 250] },
-  });
-
-  // Stamp headers and footers across all pages
-  const pageCount = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    drawHeaderFooter(i, pageCount);
+  // ---------- Header black band ----------
+  doc.setFillColor(0, 0, 0);
+  doc.rect(0, 0, pageWidth, 90, "F");
+
+  // ---------- Icon (top-left of the black band) ----------
+  let textLeft = 20; // where the "TUTR" text begins
+  if (iconDataUrl) {
+    try {
+      const iconSize = 20;          // 20mm square
+      const iconX = 20;             // left margin
+      const iconY = 32;             // vertically centred in the 90mm band
+      doc.addImage(iconDataUrl, "PNG", iconX, iconY, iconSize, iconSize);
+
+      // Shift text right so it doesn't overlap the icon
+      textLeft = iconX + iconSize + 6;
+    } catch (e) {
+      console.warn("Failed to embed icon in PDF:", e);
+      textLeft = 20; // fall back
+    }
   }
 
-  if (setProgressText) setProgressText('Downloading PDF...');
-  doc.save(`TUTR_Executive_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+  // ---------- Title ----------
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(32);
+  doc.setFont("helvetica", "bold");
+  doc.text("TUTR", textLeft, 45);
+
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "normal");
+  doc.text("Admin Console — System Report", textLeft, 58);
+
+  // Reset text color
+  doc.setTextColor(0, 0, 0);
+
+  // ---------- Body ----------
+  let y = 130;
+  doc.setFontSize(16);
+  doc.setFont("helvetica", "bold");
+  doc.text("Executive Summary Report", 20, y);
+  y += 12;
+
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(100, 100, 100);
+  doc.text(
+    `Generated on: ${new Date().toLocaleString("en-US", {
+      dateStyle: "long",
+      timeStyle: "short",
+    })}`,
+    20,
+    y,
+  );
+  y += 8;
+
+  doc.text(`Generated by: ${adminName}`, 20, y);
+  y += 25;
+
+  // Divider
+  doc.setDrawColor(230, 230, 230);
+  doc.line(20, y, pageWidth - 20, y);
+  y += 15;
+
+  doc.setTextColor(0, 0, 0);
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text("Contents:", 20, y);
+  y += 10;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  const contents = [
+    "1.  Executive Dashboard Statistics",
+    "2.  Tutor Breakdown & Directory",
+    "3.  Student Breakdown & Directory",
+    "4.  Course Catalog & Distribution",
+    "5.  Reviews & Ratings Overview",
+    "6.  Verification Requests Summary",
+  ];
+  contents.forEach((line) => {
+    doc.text(line, 25, y);
+    y += 7;
+  });
+
+  // Footer
+  doc.setFontSize(8);
+  doc.setTextColor(150, 150, 150);
+  doc.text(
+    "TUTR Admin Console  •  Confidential  •  Page 1",
+    pageWidth / 2,
+    pageHeight - 15,
+    { align: "center" },
+  );
+};
+
+const addSectionHeader = (doc, title, y) => {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 14;
+
+  // Check if we need a new page
+  if (y > doc.internal.pageSize.getHeight() - 40) {
+    doc.addPage();
+    y = 20;
+  }
+
+  doc.setFillColor(0, 0, 0);
+  doc.rect(margin, y, pageWidth - margin * 2, 12, "F");
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text(title, margin + 5, y + 8);
+
+  doc.setTextColor(0, 0, 0);
+  return y + 18;
+};
+
+// ============================================================
+// MAIN EXPORT — Build the full report
+// ============================================================
+
+export const generateFullAppPDF = async (
+  navigate,
+  setProgressText,
+  adminName = "Admin",
+) => {
+  setProgressText?.("Fetching dashboard data...");
+  const dashboard = await fetchDashboard();
+
+  setProgressText?.("Fetching tutors...");
+  const tutorsRaw = await fetchTutors();
+  const tutors = Array.isArray(tutorsRaw) ? tutorsRaw : [];
+
+  setProgressText?.("Fetching students...");
+  const studentsRaw = await fetchStudents();
+  const students = Array.isArray(studentsRaw) ? studentsRaw : [];
+
+  setProgressText?.("Fetching courses...");
+  const coursesRaw = await fetchCourses();
+  const courses = Array.isArray(coursesRaw) ? coursesRaw : [];
+
+  setProgressText?.("Fetching reviews...");
+  const reviewsRaw = await fetchReviews();
+  const reviews = Array.isArray(reviewsRaw) ? reviewsRaw : [];
+
+  setProgressText?.("Fetching verifications...");
+  const verifications = await fetchVerifications();
+
+  setProgressText?.("Preparing assets...");
+
+// Convert the icon (imported as a module URL) to a base64 data URL
+let iconDataUrl = null;
+try {
+  iconDataUrl = await toBase64(appIcon);
+} catch (e) {
+  console.warn("Icon conversion failed, PDF will render without logo:", e);
+}
+
+  setProgressText?.("Building PDF...");
+
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 14;
+
+  // ----------------------------------------------------------
+  // PAGE 1 — COVER
+  // ----------------------------------------------------------
+  addCoverPage(doc, adminName, iconDataUrl);
+
+  // ----------------------------------------------------------
+  // PAGE 2 — EXECUTIVE STATISTICS
+  // ----------------------------------------------------------
+  doc.addPage();
+  let y = 20;
+
+  y = addSectionHeader(doc, "1.  Executive Dashboard Statistics", y);
+
+  const stats = dashboard?.stats || {};
+  const statsRows = [
+    ["Total Users", String(stats.totalUsers ?? 0)],
+    ["Total Tutors", String(stats.totalTutors ?? 0)],
+    ["Total Students", String(stats.totalStudents ?? 0)],
+    ["Pending Verifications", String(stats.pendingVerifications ?? 0)],
+  ];
+
+  autoTable(doc, {
+    startY: y,
+    head: [["Metric", "Value"]],
+    body: statsRows,
+    theme: "grid",
+    headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] },
+    columnStyles: {
+      0: { cellWidth: 80, fontStyle: "bold" },
+      1: { cellWidth: "auto" },
+    },
+    margin: { left: margin, right: margin },
+  });
+  y = doc.lastAutoTable.finalY + 12;
+
+  // ----------------------------------------------------------
+  // TUTORS SECTION
+  // ----------------------------------------------------------
+  y = addSectionHeader(doc, "2.  Tutor Breakdown & Directory", y);
+
+  // Tutor status distribution
+  const tutorByStatus = {
+    Active: tutors.filter((t) => (t.status || "").toUpperCase() === "ACTIVE")
+      .length,
+    Inactive: tutors.filter((t) => (t.status || "").toUpperCase() === "INACTIVE")
+      .length,
+    Suspended: tutors.filter(
+      (t) => (t.status || "").toUpperCase() === "SUSPENDED",
+    ).length,
+    Pending: tutors.filter((t) => (t.status || "").toUpperCase() === "PENDING")
+      .length,
+    Total: tutors.length,
+  };
+
+  autoTable(doc, {
+    startY: y,
+    head: [["Status", "Count"]],
+    body: Object.entries(tutorByStatus).map(([k, v]) => [k, String(v)]),
+    theme: "grid",
+    headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] },
+    columnStyles: { 0: { cellWidth: 80, fontStyle: "bold" } },
+    margin: { left: margin, right: margin },
+  });
+  y = doc.lastAutoTable.finalY + 10;
+
+  // Tutor table
+  if (tutors.length > 0) {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("Tutor Directory", margin, y);
+    y += 5;
+
+    autoTable(doc, {
+      startY: y,
+      head: [["ID", "Name", "Email", "Role", "Status", "Rating"]],
+      body: tutors.map((t) => [
+        `TTR-${t.id ?? "—"}`,
+        t.name || "—",
+        t.email || "—",
+        t.role || "TUTOR",
+        t.status || "—",
+        t.rating != null ? Number(t.rating).toFixed(1) : "—",
+      ]),
+      theme: "striped",
+      headStyles: { fillColor: [24, 24, 27], textColor: [255, 255, 255] },
+      styles: { fontSize: 8, cellPadding: 2 },
+      margin: { left: margin, right: margin },
+    });
+    y = doc.lastAutoTable.finalY + 12;
+  }
+
+  // ----------------------------------------------------------
+  // STUDENTS SECTION
+  // ----------------------------------------------------------
+  y = addSectionHeader(doc, "3.  Student Breakdown & Directory", y);
+
+  const studentByStatus = {
+    Active: students.filter((s) => (s.status || "").toUpperCase() === "ACTIVE")
+      .length,
+    Suspended: students.filter(
+      (s) => (s.status || "").toUpperCase() === "SUSPENDED",
+    ).length,
+    Total: students.length,
+  };
+
+  autoTable(doc, {
+    startY: y,
+    head: [["Status", "Count"]],
+    body: Object.entries(studentByStatus).map(([k, v]) => [k, String(v)]),
+    theme: "grid",
+    headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] },
+    columnStyles: { 0: { cellWidth: 80, fontStyle: "bold" } },
+    margin: { left: margin, right: margin },
+  });
+  y = doc.lastAutoTable.finalY + 10;
+
+  if (students.length > 0) {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("Student Directory", margin, y);
+    y += 5;
+
+    autoTable(doc, {
+      startY: y,
+      head: [["ID", "Name", "Email", "Status", "Courses"]],
+      body: students.map((s) => [
+        `STU-${s.id ?? "—"}`,
+        s.name || "—",
+        s.email || "—",
+        s.status || "—",
+        String(s.coursesEnrolled ?? 0),
+      ]),
+      theme: "striped",
+      headStyles: { fillColor: [24, 24, 27], textColor: [255, 255, 255] },
+      styles: { fontSize: 8, cellPadding: 2 },
+      margin: { left: margin, right: margin },
+    });
+    y = doc.lastAutoTable.finalY + 12;
+  }
+
+  // ----------------------------------------------------------
+  // COURSES SECTION
+  // ----------------------------------------------------------
+  y = addSectionHeader(doc, "4.  Course Catalog & Distribution", y);
+
+  // Category distribution
+  const courseByCategory = {};
+  courses.forEach((c) => {
+    const cat = c.category || "Uncategorized";
+    courseByCategory[cat] = (courseByCategory[cat] || 0) + 1;
+  });
+
+  autoTable(doc, {
+    startY: y,
+    head: [["Category", "Count"]],
+    body: Object.entries(courseByCategory).map(([k, v]) => [k, String(v)]),
+    theme: "grid",
+    headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] },
+    columnStyles: { 0: { cellWidth: 80, fontStyle: "bold" } },
+    margin: { left: margin, right: margin },
+  });
+  y = doc.lastAutoTable.finalY + 10;
+
+  if (courses.length > 0) {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("Course Directory", margin, y);
+    y += 5;
+
+    autoTable(doc, {
+      startY: y,
+      head: [
+        ["ID", "Title", "Category", "Instructor", "Status", "Mode", "Enrolled"],
+      ],
+      body: courses.map((c) => [
+        c.id ?? "—",
+        c.title || "—",
+        c.category || "—",
+        c.instructorName || c.instructor || "—",
+        c.status || "—",
+        c.mode || "—",
+        String(c.enrolledStudents ?? 0),
+      ]),
+      theme: "striped",
+      headStyles: { fillColor: [24, 24, 27], textColor: [255, 255, 255] },
+      styles: { fontSize: 7, cellPadding: 2 },
+      margin: { left: margin, right: margin },
+    });
+    y = doc.lastAutoTable.finalY + 12;
+  }
+
+  // ----------------------------------------------------------
+  // REVIEWS SECTION
+  // ----------------------------------------------------------
+  y = addSectionHeader(doc, "5.  Reviews & Ratings Overview", y);
+
+  if (reviews.length > 0) {
+    const totalRatings = reviews.reduce((s, r) => s + (r.rating || 0), 0);
+    const avg = totalRatings / reviews.length;
+    const distribution = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    reviews.forEach((r) => {
+      if (distribution[r.rating] != null) distribution[r.rating]++;
+    });
+
+    autoTable(doc, {
+      startY: y,
+      head: [["Metric", "Value"]],
+      body: [
+        ["Total Reviews", String(reviews.length)],
+        ["Average Rating", avg.toFixed(2)],
+        ["5 Stars", String(distribution[5])],
+        ["4 Stars", String(distribution[4])],
+        ["3 Stars", String(distribution[3])],
+        ["2 Stars", String(distribution[2])],
+        ["1 Star", String(distribution[1])],
+      ],
+      theme: "grid",
+      headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] },
+      columnStyles: { 0: { cellWidth: 80, fontStyle: "bold" } },
+      margin: { left: margin, right: margin },
+    });
+    y = doc.lastAutoTable.finalY + 12;
+  } else {
+    doc.setFontSize(10);
+    doc.setTextColor(150, 150, 150);
+    doc.setFont("helvetica", "italic");
+    doc.text("No reviews available.", margin, y);
+    doc.setTextColor(0, 0, 0);
+    y += 12;
+  }
+
+  // ----------------------------------------------------------
+  // VERIFICATIONS SECTION
+  // ----------------------------------------------------------
+  y = addSectionHeader(doc, "6.  Verification Requests Summary", y);
+
+  autoTable(doc, {
+    startY: y,
+    head: [["Status", "Count"]],
+    body: [
+      ["Pending", String(verifications.pending.length)],
+      ["Approved", String(verifications.approved.length)],
+      ["Rejected", String(verifications.rejected.length)],
+      ["Total", String(
+        verifications.pending.length +
+          verifications.approved.length +
+          verifications.rejected.length,
+      )],
+    ],
+    theme: "grid",
+    headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] },
+    columnStyles: { 0: { cellWidth: 80, fontStyle: "bold" } },
+    margin: { left: margin, right: margin },
+  });
+
+  // ----------------------------------------------------------
+  // FOOTER ON ALL PAGES
+  // ----------------------------------------------------------
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let i = 2; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(150, 150, 150);
+    doc.text(
+      `TUTR Admin Console  •  Page ${i} of ${pageCount}`,
+      pageWidth / 2,
+      doc.internal.pageSize.getHeight() - 8,
+      { align: "center" },
+    );
+  }
+
+  // ----------------------------------------------------------
+  // SAVE
+  // ----------------------------------------------------------
+  const today = new Date().toISOString().slice(0, 10);
+  doc.save(`TUTR_Admin_Report_${today}.pdf`);
 };
