@@ -1,19 +1,25 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import AdminLogin from './pages/AdminLogin';
-import Dashboard from './pages/Dashboard';
-import TutorManagement from './pages/TutorManagement';
-import HelpCenter from './pages/HelpCenter'; 
-import StudentManagement from './pages/StudentManagement';
-import VerificationRequests from './pages/VerificationRequests';
-import Settings from './pages/Settings';
-import CourseManagement from './pages/Courses';
-import ReviewsPage from './pages/ReviewsPage';
-import BlockedPage from './pages/BlockedPage';
-import ReportsPage from './pages/ReportsPage';
-import TeamAccessControlPage from './pages/TeamAccessControlPage';
-import NotificationsPage from './pages/NotificationsPage';
-import Chat from './pages/Chat';
+import React from "react";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+import AdminLogin from "./pages/AdminLogin";
+import Dashboard from "./pages/Dashboard";
+import TutorManagement from "./pages/TutorManagement";
+import HelpCenter from "./pages/HelpCenter";
+import StudentManagement from "./pages/StudentManagement";
+import VerificationRequests from "./pages/VerificationRequests";
+import Settings from "./pages/Settings";
+import CourseManagement from "./pages/Courses";
+import ReviewsPage from "./pages/ReviewsPage";
+import BlockedPage from "./pages/BlockedPage";
+import ReportsPage from "./pages/ReportsPage";
+import TeamAccessControlPage from "./pages/TeamAccessControlPage";
+import NotificationsPage from "./pages/NotificationsPage";
+import Chat from "./pages/Chat";
+import SuperAdminRoute from "./components/SuperAdminRoute";
 
 function App() {
   return (
@@ -21,16 +27,19 @@ function App() {
       <Routes>
         {/* Default Redirect */}
         <Route path="/" element={<Navigate to="/login" replace />} />
-        
+
         {/* Auth Route */}
         <Route path="/login" element={<AdminLogin />} />
-        
+
         {/* Main Console Routes */}
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/tutors" element={<TutorManagement />} />
-        <Route path="/tutormanagement" element={<Navigate to="/tutors" replace />} />
-        
+        <Route
+          path="/tutormanagement"
+          element={<Navigate to="/tutors" replace />}
+        />
+
         {/* Placeholder Routes for Sidebar Items */}
         <Route path="/students" element={<StudentManagement />} />
         <Route path="/verifications" element={<VerificationRequests />} />
@@ -39,12 +48,22 @@ function App() {
         <Route path="/reviews" element={<ReviewsPage />} />
         <Route path="/blocked" element={<BlockedPage />} />
         <Route path="/chat" element={<Chat />} />
-        <Route path="/team" element={<TeamAccessControlPage />} />
+
+        {/*  Super-admin-only route */}
+        <Route
+          path="/team"
+          element={
+            <SuperAdminRoute>
+              <TeamAccessControlPage />
+            </SuperAdminRoute>
+          }
+        />
+
         <Route path="/settings" element={<Settings />} />
-        
+
         {/* Support */}
         <Route path="/help" element={<HelpCenter />} />
-        
+
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>

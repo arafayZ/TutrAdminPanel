@@ -22,13 +22,20 @@ export const adminFetch = async (path, options = {}) => {
   });
 
   // Session expired → clear + redirect with reason
-  if (response.status === 401 || response.status === 403) {
-    localStorage.removeItem('admin_token');
-    localStorage.removeItem('admin_user');
-    window.location.href = '/login?reason=session_expired';
-    throw new Error('Session expired');
-  }
+ //  401 = session expired → logout
+if (response.status === 401) {
+  localStorage.removeItem('admin_token');
+  localStorage.removeItem('admin_user');
+  window.location.href = '/login?reason=session_expired';
+  throw new Error('Session expired');
+}
 
+//  403 = permission denied → don't logout, throw distinct error
+if (response.status === 403) {
+  const err = new Error('Forbidden');
+  err.status = 403;
+  throw err;
+}
   return response;
 };
 
@@ -46,12 +53,18 @@ export const adminUpload = async (path, formData, method = 'POST') => {
   });
 
   // Session expired → clear + redirect with reason
-  if (response.status === 401 || response.status === 403) {
-    localStorage.removeItem('admin_token');
-    localStorage.removeItem('admin_user');
-    window.location.href = '/login?reason=session_expired';
-    throw new Error('Session expired');
-  }
+ if (response.status === 401) {
+  localStorage.removeItem('admin_token');
+  localStorage.removeItem('admin_user');
+  window.location.href = '/login?reason=session_expired';
+  throw new Error('Session expired');
+}
+
+if (response.status === 403) {
+  const err = new Error('Forbidden');
+  err.status = 403;
+  throw err;
+}
 
   return response;
 };

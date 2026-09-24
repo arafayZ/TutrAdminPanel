@@ -17,6 +17,10 @@ const Sidebar = ({ activePage = "", onNavigateDashboard }) => {
     ? `${storedUser.firstName} ${storedUser.lastName || ""}`.trim()
     : "Admin";
 
+  //  Role-based access
+  const loggedInRole = (storedUser.role || "").toUpperCase();
+  const isSuperAdmin = loggedInRole === "SUPER_ADMIN";
+
   const handleNavigation = (item) => {
     if (item.id === "dashboard" && onNavigateDashboard) {
       onNavigateDashboard();
@@ -253,6 +257,7 @@ const Sidebar = ({ activePage = "", onNavigateDashboard }) => {
           />
         </svg>
       ),
+      superAdminOnly: true, //  flag
     },
     {
       id: "settings",
@@ -350,26 +355,28 @@ const Sidebar = ({ activePage = "", onNavigateDashboard }) => {
           </div>
 
           <nav className="space-y-1">
-            {navItems.map((item) => {
-              const isActive =
-                location.pathname === item.path ||
-                activePage.toLowerCase() === item.id.toLowerCase();
+            {navItems
+              .filter((item) => !item.superAdminOnly || isSuperAdmin) //  filter
+              .map((item) => {
+                const isActive =
+                  location.pathname === item.path ||
+                  activePage.toLowerCase() === item.id.toLowerCase();
 
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => handleNavigation(item)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-xs transition-colors w-full text-left cursor-pointer ${
-                    isActive
-                      ? "bg-[#1F1F1F] text-white"
-                      : "text-gray-400 hover:text-white hover:bg-zinc-900"
-                  }`}
-                >
-                  {item.icon}
-                  {item.label}
-                </button>
-              );
-            })}
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleNavigation(item)}
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-xs transition-colors w-full text-left cursor-pointer ${
+                      isActive
+                        ? "bg-[#1F1F1F] text-white"
+                        : "text-gray-400 hover:text-white hover:bg-zinc-900"
+                    }`}
+                  >
+                    {item.icon}
+                    {item.label}
+                  </button>
+                );
+              })}
           </nav>
         </div>
 
