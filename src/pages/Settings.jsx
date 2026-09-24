@@ -466,7 +466,7 @@ const Settings = () => {
         ["Email Address", profile.email],
         ["Role", profile.role],
         ["Status", profile.status],
-        ["Security", "Password Last Changed 3 months ago"],
+        ["Security", "Manage your password to keep your account secure"],
       ],
       theme: "grid",
       headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] },
@@ -654,7 +654,7 @@ const Settings = () => {
                   <div>
                     <p className="text-xs font-bold text-gray-900">Password</p>
                     <p className="text-[11px] text-gray-400 mt-0.5">
-                      Last changed 3 months ago
+                      Manage your password to keep your account secure{" "}
                     </p>
                   </div>
                   <button

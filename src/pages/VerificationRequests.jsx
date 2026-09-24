@@ -28,6 +28,16 @@ const statusLabel = (status) => {
   return status;
 };
 
+// ✅ Detect file type from URL
+const getFileType = (url) => {
+  if (!url) return "unknown";
+  const clean = url.split("?")[0].toLowerCase();
+  if (/\.(jpg|jpeg|png|gif|webp|bmp)$/.test(clean)) return "image";
+  if (/\.pdf$/.test(clean)) return "pdf";
+  if (/\.(doc|docx|ppt|pptx|xls|xlsx|txt|csv)$/.test(clean)) return "doc";
+  return "unknown";
+};
+
 // ============================================================
 // AVATAR FALLBACK
 // ============================================================
@@ -48,9 +58,13 @@ const getAvatarSrc = (url, name = "") => {
 };
 
 const mapFromBackend = (dto) => {
-  // ✅ Distinguish banned vs rejected using accountStatus
   const isBanned = dto.accountStatus === "BANNED";
   const displayStatus = isBanned ? "Banned" : statusLabel(dto.status);
+
+  const cnicUrl = dto.cnicImageUrl ? getImageUrl(dto.cnicImageUrl) : null;
+  const certUrl = dto.certificateImageUrl
+    ? getImageUrl(dto.certificateImageUrl)
+    : null;
 
   return {
     id: dto.id,
@@ -68,9 +82,9 @@ const mapFromBackend = (dto) => {
     gender: dto.gender || "—",
     dateOfBirth: dto.dateOfBirth || "—",
     subject: "",
-    status: displayStatus, // "Banned" or "Rejected" or ...
+    status: displayStatus,
     accountStatus: dto.accountStatus || null,
-    isBanned, // convenience flag
+    isBanned,
     uploadedAt: dto.uploadedAt,
     verifiedAt: dto.verifiedAt,
     appliedTime: dto.uploadedAt
@@ -80,17 +94,17 @@ const mapFromBackend = (dto) => {
     resubmissionCount: dto.resubmissionCount ?? 0,
     avatar: getImageUrl(dto.profilePicture),
     documents: [
-      dto.cnicImageUrl && {
+      cnicUrl && {
         id: 1,
         title: "CNIC",
-        type: "image",
-        url: getImageUrl(dto.cnicImageUrl),
+        type: getFileType(cnicUrl),
+        url: cnicUrl,
       },
-      dto.certificateImageUrl && {
+      certUrl && {
         id: 2,
         title: "CERTIFICATE",
-        type: "image",
-        url: getImageUrl(dto.certificateImageUrl),
+        type: getFileType(certUrl),
+        url: certUrl,
       },
     ].filter(Boolean),
   };
@@ -123,6 +137,59 @@ const Spinner = ({ className = "w-3.5 h-3.5" }) => (
 );
 
 // ============================================================
+// DOCUMENT THUMBNAIL (in card grid)
+// ============================================================
+const DocumentThumbnail = ({ doc, onClick }) => (
+  <div
+    onClick={onClick}
+    className="relative group h-24 rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 cursor-pointer"
+  >
+    {doc.type === "image" ? (
+      <img
+        src={doc.url}
+        alt={doc.title}
+        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+        onError={(e) => {
+          e.target.style.display = "none";
+        }}
+      />
+    ) : doc.type === "pdf" ? (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-red-50">
+        <svg
+          className="w-8 h-8 text-red-600 mb-1"
+          fill="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 7V3.5L18.5 9H13z" />
+        </svg>
+        <span className="text-[9px] font-bold text-red-700 uppercase tracking-wider">
+          PDF
+        </span>
+      </div>
+    ) : (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-blue-50">
+        <svg
+          className="w-8 h-8 text-blue-600 mb-1"
+          fill="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 7V3.5L18.5 9H13z" />
+        </svg>
+        <span className="text-[9px] font-bold text-blue-700 uppercase tracking-wider">
+          DOC
+        </span>
+      </div>
+    )}
+
+    {/* Overlay + label */}
+    <div className="absolute inset-0 bg-black/30 group-hover:bg-black/40 transition-colors pointer-events-none"></div>
+    <span className="absolute bottom-2 left-2 right-2 text-[9px] font-bold text-white uppercase tracking-wider truncate drop-shadow-xs">
+      {doc.title}
+    </span>
+  </div>
+);
+
+// ============================================================
 // MAIN COMPONENT
 // ============================================================
 const VerificationRequests = () => {
@@ -133,7 +200,6 @@ const VerificationRequests = () => {
   const [requests, setRequests] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // ✅ Banned count tracked separately
   const [counts, setCounts] = useState({
     Pending: 0,
     Approved: 0,
@@ -178,7 +244,6 @@ const VerificationRequests = () => {
       const approvedList = Array.isArray(a) ? a : [];
       const rejectedList = Array.isArray(r) ? r : [];
 
-      // ✅ Split rejected into banned + non-banned
       const bannedCount = rejectedList.filter(
         (item) => item.accountStatus === "BANNED",
       ).length;
@@ -203,7 +268,6 @@ const VerificationRequests = () => {
   const fetchRequests = async () => {
     setIsLoading(true);
     try {
-      // ✅ Banned tab fetches REJECTED from backend, then filters locally
       const backendStatus =
         activeTab === "Banned" ? "REJECTED" : activeTab.toUpperCase();
 
@@ -215,7 +279,6 @@ const VerificationRequests = () => {
 
       let mapped = data.map(mapFromBackend);
 
-      // ✅ Frontend filtering
       if (activeTab === "Banned") {
         mapped = mapped.filter((item) => item.isBanned);
       } else if (activeTab === "Rejected") {
@@ -416,7 +479,6 @@ const VerificationRequests = () => {
     return <NotificationsPage onBack={() => setViewState("dashboard")} />;
   }
 
-  // Tab definitions
   const tabs = ["Pending", "Approved", "Rejected", "Banned"];
 
   return (
@@ -445,7 +507,6 @@ const VerificationRequests = () => {
               </p>
             </div>
 
-            {/* ✅ 4 Tabs with Banned */}
             <div className="bg-gray-200/70 p-1 rounded-2xl flex items-center text-xs font-semibold">
               {tabs.map((tab) => (
                 <button
@@ -522,7 +583,6 @@ const VerificationRequests = () => {
                             <span className="text-[10px] font-extrabold bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full uppercase tracking-wider">
                               {item.appliedTime}
                             </span>
-                            {/* ✅ Banned badge */}
                             {item.isBanned && (
                               <span className="text-[9px] font-extrabold bg-red-100 text-red-700 px-2 py-0.5 rounded-full uppercase tracking-wider">
                                 ⛔ Permanently Banned
@@ -550,30 +610,17 @@ const VerificationRequests = () => {
                           ) : (
                             <div className="grid grid-cols-2 gap-3">
                               {item.documents.map((doc) => (
-                                <div
+                                <DocumentThumbnail
                                   key={doc.id}
+                                  doc={doc}
                                   onClick={() => setViewingDocument(doc)}
-                                  className="relative group h-24 rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 cursor-pointer"
-                                >
-                                  <img
-                                    src={doc.url}
-                                    alt={doc.title}
-                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                                    onError={(e) => {
-                                      e.target.style.display = "none";
-                                    }}
-                                  />
-                                  <div className="absolute inset-0 bg-black/30 group-hover:bg-black/40 transition-colors"></div>
-                                  <span className="absolute bottom-2 left-2 right-2 text-[9px] font-bold text-white uppercase tracking-wider truncate drop-shadow-xs">
-                                    {doc.title}
-                                  </span>
-                                </div>
+                                />
                               ))}
                             </div>
                           )}
                         </div>
 
-                        {/* ✅ Rejection reason — shown on Rejected OR Banned tab */}
+                        {/* Rejection / Ban reason */}
                         {(activeTab === "Rejected" || activeTab === "Banned") &&
                           item.rejectionReason && (
                             <div
@@ -883,7 +930,6 @@ const VerificationRequests = () => {
                 </div>
               </div>
 
-              {/* ✅ Rejection / Ban reason */}
               {selectedUser.rejectionReason && (
                 <div
                   className={`p-3 rounded-2xl border ${
@@ -924,28 +970,95 @@ const VerificationRequests = () => {
         </div>
       )}
 
-      {/* Document Viewer Modal */}
+      {/* ✅ Document Viewer Modal — handles image, PDF, DOC */}
       {viewingDocument && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl relative border border-gray-100">
-            <button
-              onClick={() => setViewingDocument(null)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-black cursor-pointer"
-            >
-              ✕
-            </button>
-            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">
-              {viewingDocument.title}
-            </h3>
-            <img
-              src={viewingDocument.url}
-              alt="Document"
-              className="w-full h-80 object-contain rounded-2xl bg-gray-50 border border-gray-100"
-              onError={(e) => {
-                e.target.src =
-                  "https://placehold.co/600x400?text=Image+Not+Available";
-              }}
-            />
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setViewingDocument(null)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] shadow-2xl relative border border-gray-100 flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+                  {viewingDocument.title}
+                </h3>
+                <p className="text-[10px] text-gray-400 mt-0.5">
+                  {viewingDocument.type === "image" && "Image preview"}
+                  {viewingDocument.type === "pdf" && "PDF preview"}
+                  {viewingDocument.type === "doc" && "Document file"}
+                  {viewingDocument.type === "unknown" && "File"}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={viewingDocument.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 text-[11px] font-bold rounded-lg transition-colors"
+                >
+                  ↗ Open in new tab
+                </a>
+                <button
+                  onClick={() => setViewingDocument(null)}
+                  className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-black cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-auto p-6 bg-gray-50">
+              {viewingDocument.type === "image" ? (
+                <img
+                  src={viewingDocument.url}
+                  alt="Document"
+                  className="w-full max-h-[70vh] object-contain rounded-2xl bg-white border border-gray-100"
+                  onError={(e) => {
+                    e.target.src =
+                      "https://placehold.co/600x400?text=Image+Not+Available";
+                  }}
+                />
+              ) : viewingDocument.type === "pdf" ? (
+                <iframe
+                  src={viewingDocument.url}
+                  title="PDF Document"
+                  className="w-full h-[70vh] rounded-2xl bg-white border border-gray-100"
+                />
+              ) : (
+                <div className="w-full h-[60vh] rounded-2xl bg-white border border-gray-100 flex flex-col items-center justify-center text-center p-8">
+                  <div className="w-20 h-20 rounded-full bg-blue-50 flex items-center justify-center mb-4">
+                    <svg
+                      className="w-10 h-10 text-blue-600"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 7V3.5L18.5 9H13z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-base font-bold text-gray-900 mb-1">
+                    Preview Not Available
+                  </h4>
+                  <p className="text-xs text-gray-500 max-w-sm mb-6">
+                    Word and Office documents can't be previewed in the browser.
+                    Please download the file to view its contents.
+                  </p>
+                  <a
+                    href={viewingDocument.url}
+                    download
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-6 py-3 bg-black text-white text-xs font-bold rounded-xl hover:bg-zinc-800 transition-colors"
+                  >
+                    ⬇ Download Document
+                  </a>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
