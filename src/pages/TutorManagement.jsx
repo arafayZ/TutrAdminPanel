@@ -302,7 +302,6 @@ const Pagination = ({
 }) => {
   if (totalPages <= 1) return null;
 
-  // Build page numbers to show (max 5 around current)
   const pages = [];
   const maxVisible = 5;
   let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
@@ -400,7 +399,7 @@ const TutorManagement = () => {
   const [tutors, setTutors] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // ✅ Pagination state
+  // ✅ Pagination
   const ITEMS_PER_PAGE = 10;
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -410,6 +409,10 @@ const TutorManagement = () => {
 
   const [tutorToSuspend, setTutorToSuspend] = useState(null);
   const [isProcessingStatus, setIsProcessingStatus] = useState(false);
+
+  // ✅ Email modal state
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [emailSelection, setEmailSelection] = useState([]);
 
   // ============================================================
   // FETCH TUTORS LIST
@@ -432,7 +435,7 @@ const TutorManagement = () => {
       if (!res.ok) throw new Error("Failed to fetch tutors");
       const data = await res.json();
       setTutors(data.map(mapListTutor));
-      setCurrentPage(1); // reset to page 1 whenever filters change
+      setCurrentPage(1);
     } catch (err) {
       console.error("Error fetching tutors:", err);
       setTutors([]);
@@ -534,6 +537,51 @@ const TutorManagement = () => {
   };
 
   // ============================================================
+  // EMAIL MODAL HANDLERS
+  // ============================================================
+  const handleOpenEmailModal = () => {
+    setEmailSelection([]);
+    setIsEmailModalOpen(true);
+  };
+
+  const handleToggleEmailRecipient = (tutor) => {
+    setEmailSelection((prev) =>
+      prev.includes(tutor.id)
+        ? prev.filter((id) => id !== tutor.id)
+        : [...prev, tutor.id],
+    );
+  };
+
+  const handleSelectAllEmailRecipients = () => {
+    if (emailSelection.length === tutors.length) {
+      setEmailSelection([]);
+    } else {
+      setEmailSelection(tutors.map((t) => t.id));
+    }
+  };
+
+  const handleWriteEmail = () => {
+    const selected = tutors.filter((t) => emailSelection.includes(t.id));
+    if (selected.length === 0) return;
+
+    const toField = selected.map((t) => t.email).join(",");
+    const subject = encodeURIComponent("TUTR Admin Console — Message");
+    const body = encodeURIComponent(
+      `Hello,\n\n\n\nBest regards,\nTUTR Administration`,
+    );
+
+    window.open(
+      `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(
+        toField,
+      )}&su=${subject}&body=${body}`,
+      "_blank",
+    );
+
+    setIsEmailModalOpen(false);
+    setEmailSelection([]);
+  };
+
+  // ============================================================
   // PDF — LIST
   // ============================================================
   const handleExportPDF = () => {
@@ -553,7 +601,6 @@ const TutorManagement = () => {
     const tableHeaders = [
       ["ID", "Name", "Title", "Subjects", "Rating", "Status"],
     ];
-    // Export ALL filtered tutors (not just current page)
     const tableRows = tutors.map((t) => [
       t.id,
       t.name,
@@ -856,25 +903,49 @@ const TutorManagement = () => {
                   performance.
                 </p>
               </div>
-              <button
-                onClick={handleExportPDF}
-                className="self-start sm:self-auto px-4 py-2 bg-black text-white text-xs font-semibold rounded-lg flex items-center gap-2 hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
-              >
-                <svg
-                  className="w-3.5 h-3.5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+
+              {/* ✅ Header actions: Send Email + Export Data */}
+              <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                <button
+                  onClick={handleOpenEmailModal}
+                  className="bg-white border border-gray-300 hover:border-black text-gray-800 font-medium text-xs px-4 py-2.5 rounded-lg transition-all duration-150 cursor-pointer flex items-center justify-center gap-2"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                  />
-                </svg>
-                Export Data
-              </button>
+                  <svg
+                    className="w-3.5 h-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                    />
+                  </svg>
+                  Send Email
+                </button>
+
+                <button
+                  onClick={handleExportPDF}
+                  className="bg-black hover:bg-zinc-800 text-white font-medium text-xs px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <svg
+                    className="w-3.5 h-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                    />
+                  </svg>
+                  Export Data
+                </button>
+              </div>
             </div>
 
             {/* Filters */}
@@ -1032,7 +1103,6 @@ const TutorManagement = () => {
                 </table>
               </div>
 
-              {/* Pagination */}
               {!isLoading && paginatedTutors.length > 0 && (
                 <Pagination
                   currentPage={currentPage}
@@ -1046,6 +1116,133 @@ const TutorManagement = () => {
           </div>
         )}
       </main>
+
+      {/* ============================================================ */}
+      {/* EMAIL RECIPIENT SELECTION MODAL */}
+      {/* ============================================================ */}
+      {isEmailModalOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl p-6 max-w-lg w-full border border-gray-100 shadow-2xl space-y-4 my-8 flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-gray-900">
+                  Select Email Recipients
+                </h3>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  Choose one or more tutors to email.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsEmailModalOpen(false)}
+                className="text-gray-400 hover:text-black text-lg font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between px-2">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={
+                    tutors.length > 0 && emailSelection.length === tutors.length
+                  }
+                  onChange={handleSelectAllEmailRecipients}
+                  className="w-4 h-4 accent-black cursor-pointer"
+                />
+                <span className="text-xs font-bold text-gray-800">
+                  Select All ({tutors.length})
+                </span>
+              </label>
+              <span className="text-[11px] text-gray-500 font-medium">
+                {emailSelection.length} selected
+              </span>
+            </div>
+
+            <div className="flex-1 overflow-y-auto border border-gray-100 rounded-xl divide-y divide-gray-100">
+              {tutors.length === 0 ? (
+                <div className="py-10 text-center text-xs text-gray-400">
+                  No tutors available.
+                </div>
+              ) : (
+                tutors.map((tutor) => {
+                  const isChecked = emailSelection.includes(tutor.id);
+                  return (
+                    <label
+                      key={tutor.id}
+                      className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${
+                        isChecked ? "bg-gray-50" : "hover:bg-gray-50/50"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => handleToggleEmailRecipient(tutor)}
+                        className="w-4 h-4 accent-black cursor-pointer shrink-0"
+                      />
+                      {tutor.avatar ? (
+                        <img
+                          src={tutor.avatar}
+                          alt={tutor.name}
+                          className="w-8 h-8 rounded-full object-cover shrink-0 border border-gray-200"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-700 font-bold text-[10px] flex items-center justify-center shrink-0">
+                          {tutor.name?.[0]?.toUpperCase() || "?"}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-gray-900 truncate">
+                          {tutor.name}
+                        </p>
+                        <p className="text-[11px] text-gray-400 truncate">
+                          {tutor.email}
+                        </p>
+                      </div>
+                      <span
+                        className={`text-[9px] font-extrabold tracking-wider uppercase px-2 py-0.5 rounded ${getStatusBadgeStyle(
+                          tutor.status,
+                        )}`}
+                      >
+                        {tutor.status}
+                      </span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+              <button
+                onClick={() => setIsEmailModalOpen(false)}
+                className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleWriteEmail}
+                disabled={emailSelection.length === 0}
+                className="px-4 py-2.5 bg-black hover:bg-zinc-800 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <svg
+                  className="w-3.5 h-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                  />
+                </svg>
+                Write Email ({emailSelection.length})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tutor Details Drawer */}
       {selectedTutor && (
@@ -1091,7 +1288,6 @@ const TutorManagement = () => {
                   )}
                 </div>
 
-                {/* Email */}
                 <div className="space-y-2">
                   <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
                     Email
@@ -1115,7 +1311,6 @@ const TutorManagement = () => {
                   </div>
                 </div>
 
-                {/* Personal Info */}
                 <div className="space-y-3">
                   <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
                     Personal Information
@@ -1137,7 +1332,6 @@ const TutorManagement = () => {
                   </div>
                 </div>
 
-                {/* Education */}
                 <div className="space-y-3">
                   <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
                     Education
@@ -1162,7 +1356,6 @@ const TutorManagement = () => {
                   </div>
                 </div>
 
-                {/* Work Experience */}
                 <div className="space-y-3">
                   <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
                     Work Experience
@@ -1174,7 +1367,6 @@ const TutorManagement = () => {
                   </div>
                 </div>
 
-                {/* Stats */}
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-gray-50/80 p-2.5 rounded-xl border border-gray-100">
                     <span className="text-[8px] font-bold uppercase text-gray-400 block tracking-wider">
@@ -1210,7 +1402,6 @@ const TutorManagement = () => {
                   </div>
                 </div>
 
-                {/* Warnings with reasons */}
                 <div className="bg-amber-50 p-3 rounded-xl border border-amber-100 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[8px] font-bold uppercase text-amber-600 tracking-wider">
@@ -1255,7 +1446,6 @@ const TutorManagement = () => {
                   )}
                 </div>
 
-                {/* Offered Courses */}
                 <div className="space-y-3">
                   <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
                     Offered Courses
@@ -1273,7 +1463,6 @@ const TutorManagement = () => {
                   )}
                 </div>
 
-                {/* Current Students */}
                 <div className="space-y-3">
                   <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
                     Current Students
@@ -1317,7 +1506,6 @@ const TutorManagement = () => {
                   )}
                 </div>
 
-                {/* Deals */}
                 <div className="space-y-3">
                   <h5 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
                     Deals
@@ -1342,7 +1530,6 @@ const TutorManagement = () => {
             )}
           </div>
 
-          {/* Footer */}
           <div className="pt-6 border-t border-gray-100 space-y-2">
             <button
               onClick={handleExportIndividualPDF}

@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
-
 import { adminFetch, getImageUrl } from "../api/adminClient";
 
 // ---------- Reusable eye icons ----------
@@ -45,8 +45,6 @@ const EyeOffIcon = ({ className = "w-4 h-4" }) => (
 );
 
 const TeamAccessControlPage = () => {
-  const navigate = useNavigate();
-
   // Navigation & View States
   const [searchQuery, setSearchQuery] = useState("");
   const [filterRole, setFilterRole] = useState("All");
@@ -59,7 +57,12 @@ const TeamAccessControlPage = () => {
   const [isReactivateModalOpen, setIsReactivateModalOpen] = useState(false);
   const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState(null);
+
+  // ✅ Email selection state
+  const [emailSelection, setEmailSelection] = useState([]); // array of member ids
+  const [emailRecipients, setEmailRecipients] = useState([]); // array of {id, name, email}
 
   // Password visibility toggles
   const [showPassword, setShowPassword] = useState(false);
@@ -70,7 +73,7 @@ const TeamAccessControlPage = () => {
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
 
-  // See-Detail editable form state (NO password field)
+  // See-Detail editable form state
   const [detailForm, setDetailForm] = useState({
     firstName: "",
     lastName: "",
@@ -155,7 +158,6 @@ const TeamAccessControlPage = () => {
         return;
       }
 
-      // Map backend response → frontend shape
       const mapped = data.map((a) => ({
         id: String(a.id),
         firstName: a.firstName,
@@ -178,12 +180,11 @@ const TeamAccessControlPage = () => {
     }
   };
 
-  // Load on mount
   useEffect(() => {
     loadTeamMembers();
   }, []);
 
-  // Close custom dropdown on click outside
+  // Close dropdown on click outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -250,7 +251,6 @@ const TeamAccessControlPage = () => {
 
   const handleUpdateMember = async (e) => {
     e.preventDefault();
-
     try {
       const response = await adminFetch(
         `/api/admin/team/${selectedMember.id}/role`,
@@ -284,9 +284,7 @@ const TeamAccessControlPage = () => {
     try {
       const response = await adminFetch(
         `/api/admin/team/${selectedMember.id}/deactivate`,
-        {
-          method: "PUT",
-        },
+        { method: "PUT" },
       );
 
       if (!response.ok) {
@@ -303,20 +301,16 @@ const TeamAccessControlPage = () => {
     }
   };
 
-  // Open the reactivation confirmation modal
   const handleOpenReactivate = (member) => {
     setSelectedMember(member);
     setIsReactivateModalOpen(true);
   };
 
-  // Confirm and perform reactivation
   const handleConfirmReactivate = async () => {
     try {
       const response = await adminFetch(
         `/api/admin/team/${selectedMember.id}/reactivate`,
-        {
-          method: "PUT",
-        },
+        { method: "PUT" },
       );
 
       if (!response.ok) {
@@ -333,7 +327,7 @@ const TeamAccessControlPage = () => {
     }
   };
 
-  // ---------- See Detail (NO password field) ----------
+  // ---------- See Detail ----------
   const handleOpenDetail = (member) => {
     setSelectedMember(member);
     setDetailForm({
@@ -351,7 +345,6 @@ const TeamAccessControlPage = () => {
   const handleSaveDetails = async (e) => {
     e.preventDefault();
 
-    // Only send editable fields — NO password
     const body = {
       firstName: detailForm.firstName,
       lastName: detailForm.lastName,
@@ -411,14 +404,96 @@ const TeamAccessControlPage = () => {
     }
   };
 
-  // ---------- Message Icon → navigate to Chat ----------
-  const handleMessageMember = (member) => {
-    navigate("/chat", {
-      state: {
-        contactName: member.name,
-        contactRole: member.role === "SUPER ADMIN" ? "Super Admin" : "Admin",
-      },
+  // ---------- Export Team Data PDF ----------
+  const handleExportData = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text("TUTR - Team & Access Control Report", 14, 15);
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(
+      `Role Filter: ${filterRole} | Date: ${new Date().toLocaleDateString()}`,
+      14,
+      22,
+    );
+
+    const tableHeaders = [
+      ["ID", "Name", "Email", "Date of Birth", "Role", "Status"],
+    ];
+    const tableRows = filteredMembers.map((m) => [
+      m.id,
+      m.name,
+      m.email,
+      m.dob || "—",
+      m.role,
+      m.status,
+    ]);
+
+    autoTable(doc, {
+      startY: 28,
+      head: tableHeaders,
+      body: tableRows,
+      theme: "grid",
+      headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] },
     });
+
+    doc.save(
+      `Team_Report_${filterRole}_${new Date().toISOString().slice(0, 10)}.pdf`,
+    );
+  };
+
+  // ---------- Email Modal handlers ----------
+  const handleOpenEmailModal = () => {
+    setEmailSelection([]);
+    setEmailRecipients([]);
+    setIsEmailModalOpen(true);
+  };
+
+  const handleToggleEmailRecipient = (member) => {
+    setEmailSelection((prev) => {
+      const isSelected = prev.includes(member.id);
+      if (isSelected) {
+        return prev.filter((id) => id !== member.id);
+      }
+      return [...prev, member.id];
+    });
+  };
+
+  const handleSelectAllEmailRecipients = () => {
+    if (emailSelection.length === filteredMembers.length) {
+      setEmailSelection([]);
+    } else {
+      setEmailSelection(filteredMembers.map((m) => m.id));
+    }
+  };
+
+  const handleWriteEmail = () => {
+    // Collect selected member objects
+    const selected = filteredMembers.filter((m) =>
+      emailSelection.includes(m.id),
+    );
+
+    if (selected.length === 0) return;
+
+    // Build "to" field with all selected emails
+    const toField = selected.map((m) => m.email).join(",");
+    const subject = encodeURIComponent("TUTR Admin Console — Message");
+    const body = encodeURIComponent(
+      `Hello,\n\n\n\nBest regards,\nTUTR Administration`,
+    );
+
+    // Open Gmail compose
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(
+      toField,
+    )}&su=${subject}&body=${body}`;
+
+    window.open(gmailUrl, "_blank");
+
+    // Close modal and reset
+    setIsEmailModalOpen(false);
+    setEmailSelection([]);
   };
 
   // ---------- Filters ----------
@@ -465,6 +540,7 @@ const TeamAccessControlPage = () => {
               {loadError}
             </div>
           )}
+
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
@@ -476,12 +552,54 @@ const TeamAccessControlPage = () => {
               </p>
             </div>
 
-            <button
-              onClick={() => setIsAddModalOpen(true)}
-              className="bg-black hover:bg-zinc-800 text-white font-medium text-xs px-4 py-2.5 rounded-lg transition-all duration-150 cursor-pointer flex items-center justify-center gap-2 shadow-xs self-start sm:self-auto"
-            >
-              <span className="text-sm font-bold">+</span> Add Admin
-            </button>
+            <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+              <button
+                onClick={handleOpenEmailModal}
+                className="bg-white border border-gray-300 hover:border-black text-gray-800 font-medium text-xs px-4 py-2.5 rounded-lg transition-all duration-150 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <svg
+                  className="w-3.5 h-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                  />
+                </svg>
+                Send Email
+              </button>
+
+              <button
+                onClick={handleExportData}
+                className="bg-white border border-gray-300 hover:border-black text-gray-800 font-medium text-xs px-4 py-2.5 rounded-lg transition-all duration-150 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <svg
+                  className="w-3.5 h-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                  />
+                </svg>
+                Export Data
+              </button>
+
+              <button
+                onClick={() => setIsAddModalOpen(true)}
+                className="bg-black hover:bg-zinc-800 text-white font-medium text-xs px-4 py-2.5 rounded-lg transition-all duration-150 cursor-pointer flex items-center justify-center gap-2 shadow-xs"
+              >
+                <span className="text-sm font-bold">+</span> Add Admin
+              </button>
+            </div>
           </div>
 
           {/* Stats */}
@@ -697,28 +815,6 @@ const TeamAccessControlPage = () => {
                         <td className="py-4 px-6 text-right font-medium">
                           <div className="flex items-center justify-end gap-3">
                             <button
-                              onClick={() => handleMessageMember(member)}
-                              title="Message"
-                              className="text-gray-500 hover:text-black transition-colors cursor-pointer"
-                            >
-                              <svg
-                                className="w-4 h-4"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth="2"
-                                  d="M8 10h8M8 14h5m-1 7a9 9 0 10-8.485-6.1L3 21l6.1-.515A8.96 8.96 0 0012 21z"
-                                />
-                              </svg>
-                            </button>
-
-                            <span className="text-gray-200">|</span>
-
-                            <button
                               onClick={() => handleOpenDetail(member)}
                               className="text-gray-700 hover:text-black font-bold text-xs cursor-pointer"
                             >
@@ -762,6 +858,137 @@ const TeamAccessControlPage = () => {
           </div>
         </div>
       </main>
+
+      {/* ---------- EMAIL RECIPIENT SELECTION MODAL ---------- */}
+      {isEmailModalOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl p-6 max-w-lg w-full border border-gray-100 shadow-2xl space-y-4 my-8 flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-gray-900">
+                  Select Email Recipients
+                </h3>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  Choose one or more team members to email.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsEmailModalOpen(false)}
+                className="text-gray-400 hover:text-black text-lg font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Select All */}
+            <div className="flex items-center justify-between px-2">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={
+                    filteredMembers.length > 0 &&
+                    emailSelection.length === filteredMembers.length
+                  }
+                  onChange={handleSelectAllEmailRecipients}
+                  className="w-4 h-4 accent-black cursor-pointer"
+                />
+                <span className="text-xs font-bold text-gray-800">
+                  Select All ({filteredMembers.length})
+                </span>
+              </label>
+              <span className="text-[11px] text-gray-500 font-medium">
+                {emailSelection.length} selected
+              </span>
+            </div>
+
+            {/* Recipient List */}
+            <div className="flex-1 overflow-y-auto border border-gray-100 rounded-xl divide-y divide-gray-100">
+              {filteredMembers.length === 0 ? (
+                <div className="py-10 text-center text-xs text-gray-400">
+                  No team members available.
+                </div>
+              ) : (
+                filteredMembers.map((member) => {
+                  const isChecked = emailSelection.includes(member.id);
+                  return (
+                    <label
+                      key={member.id}
+                      className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${
+                        isChecked ? "bg-gray-50" : "hover:bg-gray-50/50"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => handleToggleEmailRecipient(member)}
+                        className="w-4 h-4 accent-black cursor-pointer shrink-0"
+                      />
+                      {member.profileImageUrl ? (
+                        <img
+                          src={getImageUrl(member.profileImageUrl)}
+                          alt={member.name}
+                          className="w-8 h-8 rounded-full object-cover shrink-0 border border-gray-200"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-700 font-bold text-[10px] flex items-center justify-center shrink-0">
+                          {member.initials}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-gray-900 truncate">
+                          {member.name}
+                        </p>
+                        <p className="text-[11px] text-gray-400 truncate">
+                          {member.email}
+                        </p>
+                      </div>
+                      <span
+                        className={`text-[9px] font-extrabold tracking-wider uppercase px-2 py-0.5 rounded ${
+                          member.role === "SUPER ADMIN"
+                            ? "bg-black text-white"
+                            : "bg-gray-200 text-gray-700"
+                        }`}
+                      >
+                        {member.role}
+                      </span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+              <button
+                onClick={() => setIsEmailModalOpen(false)}
+                className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleWriteEmail}
+                disabled={emailSelection.length === 0}
+                className="px-4 py-2.5 bg-black hover:bg-zinc-800 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <svg
+                  className="w-3.5 h-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                  />
+                </svg>
+                Write Email ({emailSelection.length})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ---------- ADD MEMBER MODAL ---------- */}
       {isAddModalOpen && (
@@ -1013,7 +1240,7 @@ const TeamAccessControlPage = () => {
         </div>
       )}
 
-      {/* ---------- SEE DETAIL MODAL (NO password field) ---------- */}
+      {/* ---------- SEE DETAIL MODAL ---------- */}
       {isDetailModalOpen && selectedMember && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full border border-gray-100 shadow-2xl space-y-4 my-8">
@@ -1029,7 +1256,6 @@ const TeamAccessControlPage = () => {
               </button>
             </div>
 
-            {/* Read-only: Role + Status */}
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div className="bg-gray-50 rounded-xl px-3 py-2">
                 <p className="text-[10px] font-bold uppercase text-gray-400 mb-0.5">
@@ -1055,7 +1281,6 @@ const TeamAccessControlPage = () => {
               </div>
             </div>
 
-            {/* Editable fields — NO PASSWORD */}
             <form onSubmit={handleSaveDetails} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1125,7 +1350,6 @@ const TeamAccessControlPage = () => {
               </button>
             </form>
 
-            {/* Change Password sub-form */}
             <div className="border-t border-gray-100 pt-4">
               <h4 className="text-xs font-bold text-gray-900 mb-3">
                 Change Password
@@ -1230,6 +1454,7 @@ const TeamAccessControlPage = () => {
           </div>
         </div>
       )}
+
       {/* ---------- REACTIVATE MODAL ---------- */}
       {isReactivateModalOpen && selectedMember && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">

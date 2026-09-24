@@ -1,15 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import AppIcon from "../assets/tutr_icon.png";
-import DisplayPicture from "../assets/dp.JPG";
 import { adminFetch, getImageUrl } from "../api/adminClient";
 
 const Navbar = ({ searchQuery, setSearchQuery, placeholder = "Search..." }) => {
   const navigate = useNavigate();
-  // ✅ Unread notification count
   const [unreadCount, setUnreadCount] = useState(0);
 
-  // ✅ Admin user state — initialized from localStorage
   const [user, setUser] = useState(() => {
     const stored = localStorage.getItem("admin_user");
     if (stored) {
@@ -32,24 +28,16 @@ const Navbar = ({ searchQuery, setSearchQuery, placeholder = "Search..." }) => {
         console.error("Failed to parse admin_user:", e);
       }
     }
-    return {
-      id: null,
-      name: "Admin",
-      role: "",
-      avatar: null,
-    };
+    return { id: null, name: "Admin", role: "", avatar: null };
   });
 
-  // ✅ Optionally refresh from backend (ensures latest name/avatar)
   useEffect(() => {
     const loadUser = async () => {
       try {
         const response = await adminFetch("/api/admin/profile/me");
         if (!response.ok) return;
-
         const data = await response.json();
 
-        // Update state
         setUser({
           id: data.id,
           name:
@@ -61,7 +49,6 @@ const Navbar = ({ searchQuery, setSearchQuery, placeholder = "Search..." }) => {
             : null,
         });
 
-        // Also refresh localStorage (in case avatar changed elsewhere)
         localStorage.setItem(
           "admin_user",
           JSON.stringify({
@@ -74,7 +61,6 @@ const Navbar = ({ searchQuery, setSearchQuery, placeholder = "Search..." }) => {
           }),
         );
       } catch (err) {
-        // Silent fail — localStorage fallback already loaded
         console.debug("Navbar: could not refresh admin profile");
       }
     };
@@ -82,7 +68,6 @@ const Navbar = ({ searchQuery, setSearchQuery, placeholder = "Search..." }) => {
     loadUser();
   }, []);
 
-  // ✅ Poll unread notification count
   useEffect(() => {
     const fetchUnreadCount = async () => {
       try {
@@ -91,43 +76,47 @@ const Navbar = ({ searchQuery, setSearchQuery, placeholder = "Search..." }) => {
         const data = await res.json();
         setUnreadCount(data.unreadCount || 0);
       } catch (err) {
-        // Silent — no badge on failure
+        // silent
       }
     };
 
     fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 30000); // every 30s
+    const interval = setInterval(fetchUnreadCount, 30000);
     return () => clearInterval(interval);
   }, []);
 
   return (
-    <header className="flex items-center justify-between gap-3 pl-16 pr-4 py-3 md:px-8 md:py-4 bg-white border-b border-gray-200 sticky top-0 z-20">
-      {/* Brand Logo -> Routes to Dashboard */}
-      <div className="hidden sm:flex md:w-48 items-center shrink-0">
-        <img
-          src={AppIcon}
-          alt="TUTR Logo"
-          className="h-9 w-auto object-contain cursor-pointer"
-          onClick={() => navigate("/dashboard")}
-        />
-      </div>
-
-      {/* Search Input */}
-      <div className="flex-1 min-w-0 max-w-md sm:mx-4 md:mx-8">
-        <div className="relative w-full">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery && setSearchQuery(e.target.value)}
-            placeholder={placeholder}
-            className="w-full pl-10 pr-4 py-2 bg-gray-100 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all placeholder-gray-400"
-          />
+    <header className="flex items-center gap-3 pl-16 pr-4 py-3 md:px-8 md:py-4 bg-white border-b border-gray-200 sticky top-0 z-20">
+      {/* ✅ Centered, expandable search */}
+      <div className="flex-1 flex justify-center min-w-0">
+        <div className="w-full max-w-lg">
+          <div className="relative w-full">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery && setSearchQuery(e.target.value)}
+              placeholder={placeholder}
+              className="w-full pl-10 pr-4 py-2 bg-gray-100 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-gray-300 transition-all placeholder-gray-400"
+            />
+            <svg
+              className="w-4 h-4 text-gray-400 absolute left-3.5 top-2.5 pointer-events-none"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+          </div>
         </div>
       </div>
 
       {/* Notifications & Admin Profile */}
       <div className="flex items-center justify-end gap-2 sm:gap-4 shrink-0">
-        {/* Notifications Button — with live unread badge */}
         <button
           onClick={() => navigate("/notifications")}
           className="p-2 rounded-full transition-colors cursor-pointer relative text-gray-500 hover:text-black hover:bg-gray-100"
@@ -153,7 +142,6 @@ const Navbar = ({ searchQuery, setSearchQuery, placeholder = "Search..." }) => {
           </svg>
         </button>
 
-        {/* Clickable Admin Profile -> Routes to Settings */}
         <div
           onClick={() => navigate("/settings")}
           className="flex items-center gap-2.5 sm:pl-2 sm:border-l border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
@@ -165,7 +153,6 @@ const Navbar = ({ searchQuery, setSearchQuery, placeholder = "Search..." }) => {
             </p>
           </div>
 
-          {/* Avatar — real or fallback */}
           {user.avatar ? (
             <img
               src={user.avatar}

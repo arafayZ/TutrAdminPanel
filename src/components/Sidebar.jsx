@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { generateFullAppPDF } from "../utils/generateReport";
 import { adminLogout } from "../api/adminClient";
+import tutrIcon from "../assets/app_icon1.png";
 
 const Sidebar = ({ activePage = "", onNavigateDashboard }) => {
   const navigate = useNavigate();
@@ -218,26 +219,26 @@ const Sidebar = ({ activePage = "", onNavigateDashboard }) => {
         </svg>
       ),
     },
-    {
-      id: "chat",
-      label: "MESSAGES",
-      path: "/chat",
-      icon: (
-        <svg
-          className="w-4 h-4"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2"
-            d="M8 10h8M8 14h5m-1 7a9 9 0 10-8.485-6.1L3 21l6.1-.515A8.96 8.96 0 0012 21z"
-          />
-        </svg>
-      ),
-    },
+    // {
+    //   id: "chat",
+    //   label: "MESSAGES",
+    //   path: "/chat",
+    //   icon: (
+    //     <svg
+    //       className="w-4 h-4"
+    //       fill="none"
+    //       stroke="currentColor"
+    //       viewBox="0 0 24 24"
+    //     >
+    //       <path
+    //         strokeLinecap="round"
+    //         strokeLinejoin="round"
+    //         strokeWidth="2"
+    //         d="M8 10h8M8 14h5m-1 7a9 9 0 10-8.485-6.1L3 21l6.1-.515A8.96 8.96 0 0012 21z"
+    //       />
+    //     </svg>
+    //   ),
+    // },
     {
       id: "team",
       label: "TEAM & ACCESS CONTROL",
@@ -324,15 +325,26 @@ const Sidebar = ({ activePage = "", onNavigateDashboard }) => {
         } md:translate-x-0`}
       >
         <div>
+          {/*  Header with icon + TUTR text */}
           <div className="mb-10 flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-bold tracking-widest uppercase">
-                TUTR
-              </h1>
-              <p className="text-[9px] tracking-[0.2em] text-gray-400 uppercase">
-                Admin Console
-              </p>
+            <div className="flex items-center gap-3">
+              {/* app_icon1.png before the TUTR text */}
+              <img
+                src={tutrIcon}
+                alt="TUTR"
+                className="w-10 h-10 rounded-xl object-contain shrink-0"
+              />
+
+              <div>
+                <h1 className="text-xl font-bold tracking-widest uppercase leading-none">
+                  TUTR
+                </h1>
+                <p className="text-[9px] tracking-[0.2em] text-gray-400 uppercase mt-1">
+                  Admin Console
+                </p>
+              </div>
             </div>
+
             <button
               onClick={() => setMobileOpen(false)}
               className="md:hidden p-1 text-gray-400 hover:text-white cursor-pointer"
