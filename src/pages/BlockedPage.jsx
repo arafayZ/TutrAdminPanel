@@ -1,114 +1,194 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
 import NotificationsPage from "./NotificationsPage";
+import { adminFetch, getImageUrl } from "../api/adminClient";
 
+// ============================================================
+// HELPERS
+// ============================================================
+
+const formatDate = (dt) => {
+  if (!dt) return "—";
+  const d = new Date(dt);
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+  });
+};
+
+const getInitials = (name = "") => {
+  return (name || "?")
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+};
+
+const getAvatarSrc = (url, name) => {
+  if (url && typeof url === "string" && url.trim() !== "") return url;
+  const initials = getInitials(name);
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(
+    initials,
+  )}&background=E5E7EB&color=374151&bold=true&size=128`;
+};
+
+// ============================================================
+// MAPPER
+// ============================================================
+const mapBlockFromBackend = (dto) => ({
+  id: dto.id,
+  // Blocked user (tutor)
+  name: dto.tutorName,
+  role: "Tutor",
+  userId: dto.tutorDisplayId,
+  avatar: getImageUrl(dto.tutorImage),
+  // Blocker
+  blockedBy: dto.studentName,
+  blockedByType: "student",
+  blockedByImage: getImageUrl(dto.studentImage),
+  // When
+  date: formatDate(dto.blockedAt),
+  rawDate: dto.blockedAt,
+});
+
+// ============================================================
+// MAIN COMPONENT
+// ============================================================
 const BlockedPage = () => {
-  // Navigation & View States
   const [activePage] = useState("blocked");
-  const [viewState, setViewState] = useState("blocked"); // 'blocked' | 'notifications'
+  const [viewState, setViewState] = useState("blocked");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Modal States (White Popups)
+  // Data
+  const [blockedUsers, setBlockedUsers] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Pagination
+  const [page, setPage] = useState(0);
+  const [pageSize] = useState(10);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+
+  // Modals
   const [selectedBlocked, setSelectedBlocked] = useState(null);
   const [unblockModalUser, setUnblockModalUser] = useState(null);
+  const [isUnblocking, setIsUnblocking] = useState(false);
 
-  // Blocked Users Data
-  const [blockedUsers, setBlockedUsers] = useState([
-    {
-      id: 1,
-      name: "Mubashir",
-      role: "Student",
-      userId: "S-982",
-      date: "Oct 22, 2023",
-      blockedBy: "RAFAY",
-      blockedByType: "tutor",
-    },
-    {
-      id: 2,
-      name: "Abdul Rafay",
-      role: "Tutor",
-      userId: "T-120",
-      date: "Oct 20, 2023",
-      blockedBy: "ADMIN",
-      blockedByType: "admin",
-    },
-    {
-      id: 3,
-      name: "Dr. Hamza Ahmed",
-      role: "Tutor",
-      userId: "T-104",
-      date: "Aug 04, 2026",
-      blockedBy: "Ayesha Khan",
-      blockedByType: "student",
-    },
-    {
-      id: 4,
-      name: "Usman Raza",
-      role: "Tutor",
-      userId: "T-211",
-      date: "Jul 29, 2026",
-      blockedBy: "Muhammad Huzaifa",
-      blockedByType: "student",
-    },
-    {
-      id: 5,
-      name: "Saad Ahmed",
-      role: "Student",
-      userId: "S-402",
-      date: "Jul 15, 2026",
-      blockedBy: "Usama Khalid",
-      blockedByType: "tutor",
-    },
-  ]);
-
-  // Filtered by search only (filter bar removed)
-  const filteredBlockedUsers = blockedUsers.filter((item) => {
-    const q = searchQuery.toLowerCase();
-    return (
-      item.name.toLowerCase().includes(q) ||
-      item.userId.toLowerCase().includes(q) ||
-      item.blockedBy.toLowerCase().includes(q)
-    );
-  });
-
-  // Helper to dynamically load jsPDF scripts if not available in window
-  const loadPDFScripts = () => {
-    return new Promise((resolve, reject) => {
-      if (window.jspdf && window.jspdf.jsPDF) {
-        resolve(window.jspdf);
-        return;
-      }
-
-      const script1 = document.createElement("script");
-      script1.src =
-        "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-      script1.onload = () => {
-        const script2 = document.createElement("script");
-        script2.src =
-          "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js";
-        script2.onload = () => resolve(window.jspdf);
-        script2.onerror = reject;
-        document.body.appendChild(script2);
+  // ============================================================
+  // FETCH BLOCKS
+  // ============================================================
+  const fetchBlocks = async () => {
+    setIsLoading(true);
+    try {
+      const payload = {
+        searchQuery: searchQuery.trim() || null,
+        page,
+        size: pageSize,
       };
-      script1.onerror = reject;
-      document.body.appendChild(script1);
-    });
+
+      const res = await adminFetch("/api/admin/blocks/filter", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error("Failed to fetch blocks");
+      const data = await res.json();
+
+      setBlockedUsers((data.content || []).map(mapBlockFromBackend));
+      setTotalPages(data.totalPages ?? 0);
+      setTotalElements(data.totalElements ?? 0);
+    } catch (err) {
+      console.error("Error fetching blocks:", err);
+      setBlockedUsers([]);
+      setTotalPages(0);
+      setTotalElements(0);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Export PDF Functionality
+  // Debounced fetch when search or page changes
+  useEffect(() => {
+    const t = setTimeout(fetchBlocks, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, page]);
+
+  // Reset to page 0 when search changes
+  useEffect(() => {
+    setPage(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
+
+  // ============================================================
+  // UNBLOCK
+  // ============================================================
+  const handleUnblock = async () => {
+    if (!unblockModalUser) return;
+    setIsUnblocking(true);
+
+    try {
+      const res = await adminFetch(`/api/admin/blocks/${unblockModalUser.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Unblock failed");
+
+      setUnblockModalUser(null);
+
+      // If we just removed the last item on a page > 0, go back one page
+      if (blockedUsers.length === 1 && page > 0) {
+        setPage(page - 1);
+      } else {
+        await fetchBlocks();
+      }
+    } catch (err) {
+      console.error("Unblock error:", err);
+      alert("Failed to unblock. Please try again.");
+    } finally {
+      setIsUnblocking(false);
+    }
+  };
+
+  // ============================================================
+  // PDF EXPORT
+  // ============================================================
   const handleExportData = async () => {
-    if (filteredBlockedUsers.length === 0) {
-      alert("No data available to export.");
+    if (blockedUsers.length === 0) {
+      alert("No data available to export on this page.");
       return;
     }
 
     try {
+      // loadPDFScripts helper kept local
+      const loadPDFScripts = () =>
+        new Promise((resolve, reject) => {
+          if (window.jspdf && window.jspdf.jsPDF) {
+            resolve(window.jspdf);
+            return;
+          }
+          const s1 = document.createElement("script");
+          s1.src =
+            "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+          s1.onload = () => {
+            const s2 = document.createElement("script");
+            s2.src =
+              "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js";
+            s2.onload = () => resolve(window.jspdf);
+            s2.onerror = reject;
+            document.body.appendChild(s2);
+          };
+          s1.onerror = reject;
+          document.body.appendChild(s1);
+        });
+
       await loadPDFScripts();
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
 
-      // Title & Header
       doc.setFontSize(18);
       doc.setFont("helvetica", "bold");
       doc.text("Blocked Users Report", 14, 20);
@@ -117,13 +197,12 @@ const BlockedPage = () => {
       doc.setFont("helvetica", "normal");
       doc.setTextColor(100);
       doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 26);
-      doc.text(`Total Entries: ${filteredBlockedUsers.length}`, 14, 31);
+      doc.text(`Page: ${page + 1} of ${totalPages}`, 14, 31);
+      doc.text(`Total Entries (this page): ${blockedUsers.length}`, 14, 36);
+      doc.text(`Total in system: ${totalElements}`, 14, 41);
 
-      // Columns (Reason removed)
       const headers = [["User", "Role & ID", "Blocked Date", "Done By"]];
-
-      // Rows
-      const rows = filteredBlockedUsers.map((item) => [
+      const rows = blockedUsers.map((item) => [
         item.name,
         `${item.role} • ID: ${item.userId}`,
         item.date,
@@ -133,7 +212,7 @@ const BlockedPage = () => {
       doc.autoTable({
         head: headers,
         body: rows,
-        startY: 38,
+        startY: 48,
         theme: "striped",
         headStyles: {
           fillColor: [24, 24, 27],
@@ -143,22 +222,21 @@ const BlockedPage = () => {
         styles: { fontSize: 8, cellPadding: 4 },
       });
 
-      doc.save(
-        `blocked_users_export_${new Date().toISOString().slice(0, 10)}.pdf`,
-      );
+      doc.save(`blocked_users_${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch (err) {
       console.error("Error exporting PDF:", err);
       alert("Failed to generate PDF export. Please try again.");
     }
   };
 
+  // ============================================================
+  // RENDER
+  // ============================================================
   return (
     <div className="flex h-screen bg-[#F8F9FB] font-sans text-gray-900 overflow-hidden">
-      {/* Sidebar Component */}
       <Sidebar activePage={activePage} onGenerateReport={handleExportData} />
 
       <main className="flex-1 flex flex-col overflow-y-auto">
-        {/* Navbar */}
         <Navbar
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
@@ -167,7 +245,6 @@ const BlockedPage = () => {
           placeholder="Search blocked users..."
         />
 
-        {/* View Switcher */}
         {viewState === "notifications" ? (
           <NotificationsPage onBack={() => setViewState("blocked")} />
         ) : (
@@ -183,7 +260,6 @@ const BlockedPage = () => {
                 </p>
               </div>
 
-              {/* Export Button */}
               <button
                 onClick={handleExportData}
                 className="flex items-center gap-2 bg-black hover:bg-zinc-800 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition-all cursor-pointer shadow-xs active:scale-95"
@@ -205,7 +281,6 @@ const BlockedPage = () => {
               </button>
             </div>
 
-            {/* Blocked Users Table Card */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
                 <div>
@@ -217,11 +292,12 @@ const BlockedPage = () => {
                   </p>
                 </div>
                 <span className="text-gray-400 text-[11px] font-medium">
-                  Showing {filteredBlockedUsers.length} entries
+                  {isLoading
+                    ? "Loading..."
+                    : `Showing ${blockedUsers.length} of ${totalElements} entries`}
                 </span>
               </div>
 
-              {/* Table */}
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[560px] text-left text-xs">
                   <thead>
@@ -233,7 +309,16 @@ const BlockedPage = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {filteredBlockedUsers.length === 0 ? (
+                    {isLoading ? (
+                      <tr>
+                        <td
+                          colSpan="4"
+                          className="py-8 text-center text-gray-400"
+                        >
+                          Loading blocks...
+                        </td>
+                      </tr>
+                    ) : blockedUsers.length === 0 ? (
                       <tr>
                         <td
                           colSpan="4"
@@ -243,21 +328,22 @@ const BlockedPage = () => {
                         </td>
                       </tr>
                     ) : (
-                      filteredBlockedUsers.map((item) => (
+                      blockedUsers.map((item) => (
                         <tr
                           key={item.id}
                           className="hover:bg-gray-50/50 transition-colors"
                         >
-                          {/* User Avatar & Info */}
                           <td className="py-4 px-6">
                             <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-full bg-gray-200 text-gray-700 font-bold text-xs flex items-center justify-center uppercase tracking-wider shrink-0">
-                                {item.name
-                                  .split(" ")
-                                  .map((n) => n[0])
-                                  .join("")
-                                  .slice(0, 2)}
-                              </div>
+                              <img
+                                src={getAvatarSrc(item.avatar, item.name)}
+                                alt={item.name}
+                                className="w-9 h-9 rounded-full object-cover"
+                                onError={(e) => {
+                                  e.target.onerror = null;
+                                  e.target.src = getAvatarSrc("", item.name);
+                                }}
+                              />
                               <div>
                                 <h4 className="font-bold text-gray-900 text-xs">
                                   {item.name}
@@ -269,19 +355,33 @@ const BlockedPage = () => {
                             </div>
                           </td>
 
-                          {/* Blocked Date */}
                           <td className="py-4 px-6 text-gray-500 font-medium">
                             {item.date}
                           </td>
 
-                          {/* Done By Badge */}
                           <td className="py-4 px-6">
-                            <span className="bg-gray-200/80 text-gray-900 text-[10px] font-extrabold px-2 py-0.5 rounded tracking-wide uppercase inline-block">
-                              {item.blockedBy}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <img
+                                src={getAvatarSrc(
+                                  item.blockedByImage,
+                                  item.blockedBy,
+                                )}
+                                alt={item.blockedBy}
+                                className="w-5 h-5 rounded-full object-cover"
+                                onError={(e) => {
+                                  e.target.onerror = null;
+                                  e.target.src = getAvatarSrc(
+                                    "",
+                                    item.blockedBy,
+                                  );
+                                }}
+                              />
+                              <span className="bg-gray-200/80 text-gray-900 text-[10px] font-extrabold px-2 py-0.5 rounded tracking-wide uppercase inline-block">
+                                {item.blockedBy}
+                              </span>
+                            </div>
                           </td>
 
-                          {/* Action Buttons */}
                           <td className="py-4 px-6 text-right space-x-2">
                             <button
                               onClick={() => setSelectedBlocked(item)}
@@ -302,24 +402,57 @@ const BlockedPage = () => {
                   </tbody>
                 </table>
               </div>
+
+              {/* ✅ Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-6 py-3 border-t border-gray-100">
+                  <span className="text-[11px] text-gray-500">
+                    Page {page + 1} of {totalPages}
+                  </span>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setPage((p) => Math.max(0, p - 1))}
+                      disabled={page === 0 || isLoading}
+                      className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[11px] font-bold rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      ← Previous
+                    </button>
+                    <button
+                      onClick={() =>
+                        setPage((p) => Math.min(totalPages - 1, p + 1))
+                      }
+                      disabled={page >= totalPages - 1 || isLoading}
+                      className="px-3 py-1.5 bg-black hover:bg-zinc-800 text-white text-[11px] font-bold rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Next →
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
       </main>
 
-      {/* Details Popup Modal (White Background) */}
+      {/* Details Modal */}
       {selectedBlocked && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full border border-gray-100 shadow-2xl space-y-4">
             <div className="flex items-start justify-between border-b border-gray-100 pb-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gray-200 text-gray-800 font-bold text-sm flex items-center justify-center uppercase">
-                  {selectedBlocked.name
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")
-                    .slice(0, 2)}
-                </div>
+                <img
+                  src={getAvatarSrc(
+                    selectedBlocked.avatar,
+                    selectedBlocked.name,
+                  )}
+                  alt={selectedBlocked.name}
+                  className="w-10 h-10 rounded-full object-cover"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = getAvatarSrc("", selectedBlocked.name);
+                  }}
+                />
                 <div>
                   <h4 className="font-bold text-gray-900 text-sm">
                     {selectedBlocked.name}
@@ -360,7 +493,7 @@ const BlockedPage = () => {
         </div>
       )}
 
-      {/* Unblock Confirmation Modal (White Background) */}
+      {/* Unblock Modal */}
       {unblockModalUser && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full border border-gray-100 shadow-2xl space-y-4">
@@ -379,19 +512,16 @@ const BlockedPage = () => {
 
             <div className="space-y-2 pt-2">
               <button
-                onClick={() => {
-                  setBlockedUsers((prev) =>
-                    prev.filter((u) => u.id !== unblockModalUser.id),
-                  );
-                  setUnblockModalUser(null);
-                }}
-                className="w-full py-2 bg-black hover:bg-zinc-800 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                onClick={handleUnblock}
+                disabled={isUnblocking}
+                className="w-full py-2 bg-black hover:bg-zinc-800 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Unblock User
+                {isUnblocking ? "Unblocking..." : "Unblock User"}
               </button>
               <button
                 onClick={() => setUnblockModalUser(null)}
-                className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                disabled={isUnblocking}
+                className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold rounded-xl transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
