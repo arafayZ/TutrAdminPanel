@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import Sidebar from "../components/Sidebar";
+import NotificationsPage from "./NotificationsPage";
 import {
   adminFetch,
   adminUpload,
@@ -73,6 +74,12 @@ const Settings = () => {
   // Search State
   const [searchQuery, setSearchQuery] = useState("");
 
+  // ✅ View state — 'settings' | 'notifications'
+  const [viewState, setViewState] = useState("settings");
+
+  // ✅ Unread notification count
+  const [unreadCount, setUnreadCount] = useState(0);
+
   // Form State — no hardcoded image
   const [profile, setProfile] = useState({
     firstName: "",
@@ -136,6 +143,24 @@ const Settings = () => {
 
   useEffect(() => {
     loadProfile();
+  }, []);
+
+  // ✅ Poll unread notification count (same as Navbar)
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      try {
+        const res = await adminFetch("/api/admin/notifications/unread-count");
+        if (!res.ok) return;
+        const data = await res.json();
+        setUnreadCount(data.unreadCount || 0);
+      } catch (err) {
+        // Silent — no badge on failure
+      }
+    };
+
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 30000); // every 30s
+    return () => clearInterval(interval);
   }, []);
 
   // Modal & Notification States
@@ -206,7 +231,7 @@ const Settings = () => {
   // ---------- Logout Handler ----------
   const handleConfirmLogout = () => {
     setShowLogoutModal(false);
-    adminLogout(); // clears token + redirects to /login
+    adminLogout();
   };
 
   // Handle Image Update Function
@@ -500,12 +525,23 @@ const Settings = () => {
         {/* Top Header */}
         <header className="flex items-center justify-between px-8 py-4 bg-white border-b border-gray-200 sticky top-0 z-10">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Settings</h1>
+            <h1 className="text-xl font-bold text-gray-900">
+              {viewState === "notifications" ? "Notifications" : "Settings"}
+            </h1>
           </div>
 
           <div className="flex items-center justify-end gap-4">
-            <button className="p-2 text-gray-500 hover:text-black rounded-full hover:bg-gray-100 transition-colors cursor-pointer relative">
-              <span className="w-2 h-2 bg-red-500 rounded-full absolute top-1.5 right-1.5 border border-white"></span>
+            {/* ✅ Bell button — shows badge only if unreadCount > 0 */}
+            <button
+              onClick={() => setViewState("notifications")}
+              className="p-2 text-gray-500 hover:text-black rounded-full hover:bg-gray-100 transition-colors cursor-pointer relative"
+              title="Notifications"
+            >
+              {unreadCount > 0 && (
+                <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center border border-white">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
               <svg
                 className="w-4 h-4"
                 fill="none"
@@ -535,174 +571,189 @@ const Settings = () => {
           </div>
         </header>
 
-        {/* Body Content */}
-        <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto w-full">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* Profile Picture Box */}
-            <div className="lg:col-span-4 bg-white rounded-2xl p-6 border border-gray-100 shadow-xs flex flex-col items-center text-center">
-              <div className="relative group">
-                <Avatar
-                  imageUrl={profile.avatar}
-                  name={profile.fullName}
-                  size="w-32 h-32"
-                  textSize="text-5xl"
-                />
+        {/* ✅ Body — Notifications (inline) OR Settings */}
+        {viewState === "notifications" ? (
+          <NotificationsPage
+            standalone={false}
+            onBack={() => setViewState("settings")}
+          />
+        ) : (
+          <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto w-full">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Profile Picture Box */}
+              <div className="lg:col-span-4 bg-white rounded-2xl p-6 border border-gray-100 shadow-xs flex flex-col items-center text-center">
+                <div className="relative group">
+                  <Avatar
+                    imageUrl={profile.avatar}
+                    name={profile.fullName}
+                    size="w-32 h-32"
+                    textSize="text-5xl"
+                  />
+                  <button
+                    onClick={() => setIsAvatarPickerOpen(true)}
+                    className="absolute bottom-1 right-1 bg-black text-white p-2 rounded-full cursor-pointer hover:bg-zinc-800 transition-all shadow-md"
+                  >
+                    <svg
+                      className="w-3.5 h-3.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M3 9a2 2 0 012-2h0.93a2 2 0 001.664-.89l0.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l0.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+                      />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+                      />
+                    </svg>
+                  </button>
+                </div>
+
+                <h2 className="text-base font-bold text-gray-900 mt-4">
+                  {profile.fullName}
+                </h2>
+                <p className="text-xs text-gray-400 font-medium">
+                  {profile.role}
+                </p>
+
                 <button
                   onClick={() => setIsAvatarPickerOpen(true)}
-                  className="absolute bottom-1 right-1 bg-black text-white p-2 rounded-full cursor-pointer hover:bg-zinc-800 transition-all shadow-md"
+                  className="mt-6 w-full py-2.5 px-4 bg-white border border-gray-200 text-gray-700 text-xs font-semibold rounded-xl hover:bg-gray-50 transition-colors text-center cursor-pointer"
                 >
-                  <svg
-                    className="w-3.5 h-3.5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M3 9a2 2 0 012-2h0.93a2 2 0 001.664-.89l0.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l0.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-                    />
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
-                    />
-                  </svg>
+                  Change Avatar
                 </button>
               </div>
 
-              <h2 className="text-base font-bold text-gray-900 mt-4">
-                {profile.fullName}
-              </h2>
-              <p className="text-xs text-gray-400 font-medium">
-                {profile.role}
-              </p>
-
-              <button
-                onClick={() => setIsAvatarPickerOpen(true)}
-                className="mt-6 w-full py-2.5 px-4 bg-white border border-gray-200 text-gray-700 text-xs font-semibold rounded-xl hover:bg-gray-50 transition-colors text-center cursor-pointer"
-              >
-                Change Avatar
-              </button>
-            </div>
-
-            {/* Right Column */}
-            <div className="lg:col-span-8 space-y-6">
-              {/* Read-only Account Details */}
-              <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-xs">
-                <div className="flex items-center gap-2 mb-5">
-                  <svg
-                    className="w-4 h-4 text-gray-700"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                    />
-                  </svg>
-                  <h3 className="text-lg font-bold text-gray-900">
-                    Account Details
-                  </h3>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <ReadOnlyField label="First Name" value={profile.firstName} />
-                  <ReadOnlyField label="Last Name" value={profile.lastName} />
-                  <ReadOnlyField label="Date of Birth" value={profile.dob} />
-                  <ReadOnlyField label="Email Address" value={profile.email} />
-                  <ReadOnlyField label="Role" value={profile.role} />
-                  <ReadOnlyField
-                    label="Status"
-                    value={profile.status}
-                    valueClass={
-                      profile.status === "Active"
-                        ? "text-emerald-600"
-                        : "text-red-600"
-                    }
-                  />
-                </div>
-              </div>
-
-              {/* Security & Privacy */}
-              <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-xs space-y-6">
-                <div className="flex items-center gap-2">
-                  <svg
-                    className="w-4 h-4 text-gray-700"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                    />
-                  </svg>
-                  <h3 className="text-lg font-bold text-gray-900">
-                    Security & Privacy
-                  </h3>
-                </div>
-
-                <div className="flex items-center justify-between pt-2">
-                  <div>
-                    <p className="text-xs font-bold text-gray-900">Password</p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">
-                      Manage your password to keep your account secure{" "}
-                    </p>
+              {/* Right Column */}
+              <div className="lg:col-span-8 space-y-6">
+                {/* Read-only Account Details */}
+                <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-xs">
+                  <div className="flex items-center gap-2 mb-5">
+                    <svg
+                      className="w-4 h-4 text-gray-700"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                      />
+                    </svg>
+                    <h3 className="text-lg font-bold text-gray-900">
+                      Account Details
+                    </h3>
                   </div>
-                  <button
-                    onClick={() => setIsPasswordModalOpen(true)}
-                    className="px-4 py-2 bg-white border border-gray-200 text-gray-700 text-xs font-semibold rounded-xl hover:bg-gray-50 transition-colors cursor-pointer"
-                  >
-                    Update Password
-                  </button>
-                </div>
-              </div>
 
-              {/* Logout Section */}
-              <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-xs space-y-6">
-                <div className="flex items-center gap-2">
-                  <svg
-                    className="w-4 h-4 text-red-600"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <ReadOnlyField
+                      label="First Name"
+                      value={profile.firstName}
                     />
-                  </svg>
-                  <h3 className="text-lg font-bold text-gray-900">Session</h3>
+                    <ReadOnlyField label="Last Name" value={profile.lastName} />
+                    <ReadOnlyField label="Date of Birth" value={profile.dob} />
+                    <ReadOnlyField
+                      label="Email Address"
+                      value={profile.email}
+                    />
+                    <ReadOnlyField label="Role" value={profile.role} />
+                    <ReadOnlyField
+                      label="Status"
+                      value={profile.status}
+                      valueClass={
+                        profile.status === "Active"
+                          ? "text-emerald-600"
+                          : "text-red-600"
+                      }
+                    />
+                  </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-2">
-                  <div>
-                    <p className="text-xs font-bold text-gray-900">Logout</p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">
-                      End your current session and return to the login screen
-                    </p>
+                {/* Security & Privacy */}
+                <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-xs space-y-6">
+                  <div className="flex items-center gap-2">
+                    <svg
+                      className="w-4 h-4 text-gray-700"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                      />
+                    </svg>
+                    <h3 className="text-lg font-bold text-gray-900">
+                      Security & Privacy
+                    </h3>
                   </div>
-                  <button
-                    onClick={() => setShowLogoutModal(true)}
-                    className="px-4 py-2 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-xl hover:bg-red-100 transition-colors cursor-pointer"
-                  >
-                    Logout
-                  </button>
+
+                  <div className="flex items-center justify-between pt-2">
+                    <div>
+                      <p className="text-xs font-bold text-gray-900">
+                        Password
+                      </p>
+                      <p className="text-[11px] text-gray-400 mt-0.5">
+                        Manage your password to keep your account secure{" "}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setIsPasswordModalOpen(true)}
+                      className="px-4 py-2 bg-white border border-gray-200 text-gray-700 text-xs font-semibold rounded-xl hover:bg-gray-50 transition-colors cursor-pointer"
+                    >
+                      Update Password
+                    </button>
+                  </div>
+                </div>
+
+                {/* Logout Section */}
+                <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-xs space-y-6">
+                  <div className="flex items-center gap-2">
+                    <svg
+                      className="w-4 h-4 text-red-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                      />
+                    </svg>
+                    <h3 className="text-lg font-bold text-gray-900">Session</h3>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2">
+                    <div>
+                      <p className="text-xs font-bold text-gray-900">Logout</p>
+                      <p className="text-[11px] text-gray-400 mt-0.5">
+                        End your current session and return to the login screen
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setShowLogoutModal(true)}
+                      className="px-4 py-2 bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-xl hover:bg-red-100 transition-colors cursor-pointer"
+                    >
+                      Logout
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
       </main>
 
       {/* ---------------- AVATAR SELECTION MODAL ---------------- */}

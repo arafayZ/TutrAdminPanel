@@ -8,6 +8,7 @@ import {
   ArrowRight,
   AlertCircle,
   X,
+  Loader2,
 } from "lucide-react";
 import tutrLogo from "../assets/app_icon1.png";
 
@@ -18,6 +19,9 @@ const AdminLogin = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+
+  // ✅ Loading state
+  const [isLoading, setIsLoading] = useState(false);
 
   // Modal & Error States
   const [errorMessage, setErrorMessage] = useState("");
@@ -36,11 +40,15 @@ const AdminLogin = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (isLoading) return; // prevent double-submit
+
     if (!email || !password) {
       setErrorMessage("Please enter both email and password.");
       setShowErrorModal(true);
       return;
     }
+
+    setIsLoading(true);
 
     try {
       const response = await fetch(
@@ -60,6 +68,7 @@ const AdminLogin = () => {
             "Invalid email or password. Please check your credentials.",
         );
         setShowErrorModal(true);
+        setIsLoading(false);
         return;
       }
 
@@ -81,6 +90,7 @@ const AdminLogin = () => {
     } catch (err) {
       setErrorMessage("Network error. Check your connection and try again.");
       setShowErrorModal(true);
+      setIsLoading(false);
     }
   };
 
@@ -118,7 +128,8 @@ const AdminLogin = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="admin@tutr.edu"
-              className="w-full px-4 py-3 bg-[#F3F4F6] border border-transparent rounded-xl text-sm text-gray-800 focus:outline-none focus:border-gray-300 focus:bg-white transition-all duration-200 placeholder-gray-400"
+              disabled={isLoading}
+              className="w-full px-4 py-3 bg-[#F3F4F6] border border-transparent rounded-xl text-sm text-gray-800 focus:outline-none focus:border-gray-300 focus:bg-white transition-all duration-200 placeholder-gray-400 disabled:opacity-60 disabled:cursor-not-allowed"
               required
             />
           </div>
@@ -135,13 +146,15 @@ const AdminLogin = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full px-4 py-3 bg-[#F3F4F6] border border-transparent rounded-xl text-sm text-gray-800 focus:outline-none focus:border-gray-300 focus:bg-white transition-all duration-200 placeholder-gray-400 pr-10"
+                disabled={isLoading}
+                className="w-full px-4 py-3 bg-[#F3F4F6] border border-transparent rounded-xl text-sm text-gray-800 focus:outline-none focus:border-gray-300 focus:bg-white transition-all duration-200 placeholder-gray-400 pr-10 disabled:opacity-60 disabled:cursor-not-allowed"
                 required
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none cursor-pointer"
+                disabled={isLoading}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {showPassword ? (
                   <EyeOff className="w-4 h-4" />
@@ -159,7 +172,8 @@ const AdminLogin = () => {
                 type="checkbox"
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 accent-black cursor-pointer"
+                disabled={isLoading}
+                className="w-4 h-4 rounded border-gray-300 accent-black cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               />
               Remember me
             </label>
@@ -171,13 +185,23 @@ const AdminLogin = () => {
             </a>
           </div>
 
-          {/* Login Button */}
+          {/* Login Button — with loading state */}
           <button
             type="submit"
-            className="w-full py-3.5 bg-black text-white text-sm font-semibold rounded-full hover:bg-gray-800 active:scale-[0.99] transition-all duration-200 flex items-center justify-center gap-2 mt-4 cursor-pointer"
+            disabled={isLoading}
+            className="w-full py-3.5 bg-black text-white text-sm font-semibold rounded-full hover:bg-gray-800 active:scale-[0.99] transition-all duration-200 flex items-center justify-center gap-2 mt-4 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed disabled:active:scale-100"
           >
-            Login to Console
-            <ArrowRight className="w-4 h-4" />
+            {isLoading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Logging in...
+              </>
+            ) : (
+              <>
+                Login to Console
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
           </button>
         </form>
       </div>

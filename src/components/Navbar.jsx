@@ -6,6 +6,8 @@ import { adminFetch, getImageUrl } from "../api/adminClient";
 
 const Navbar = ({ searchQuery, setSearchQuery, placeholder = "Search..." }) => {
   const navigate = useNavigate();
+  // ✅ Unread notification count
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // ✅ Admin user state — initialized from localStorage
   const [user, setUser] = useState(() => {
@@ -80,6 +82,24 @@ const Navbar = ({ searchQuery, setSearchQuery, placeholder = "Search..." }) => {
     loadUser();
   }, []);
 
+  // ✅ Poll unread notification count
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      try {
+        const res = await adminFetch("/api/admin/notifications/unread-count");
+        if (!res.ok) return;
+        const data = await res.json();
+        setUnreadCount(data.unreadCount || 0);
+      } catch (err) {
+        // Silent — no badge on failure
+      }
+    };
+
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 30000); // every 30s
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <header className="flex items-center justify-between gap-3 pl-16 pr-4 py-3 md:px-8 md:py-4 bg-white border-b border-gray-200 sticky top-0 z-20">
       {/* Brand Logo -> Routes to Dashboard */}
@@ -107,13 +127,17 @@ const Navbar = ({ searchQuery, setSearchQuery, placeholder = "Search..." }) => {
 
       {/* Notifications & Admin Profile */}
       <div className="flex items-center justify-end gap-2 sm:gap-4 shrink-0">
-        {/* Notifications Button */}
+        {/* Notifications Button — with live unread badge */}
         <button
           onClick={() => navigate("/notifications")}
           className="p-2 rounded-full transition-colors cursor-pointer relative text-gray-500 hover:text-black hover:bg-gray-100"
           title="Notifications"
         >
-          <span className="w-2 h-2 bg-red-500 rounded-full absolute top-1.5 right-1.5 border border-white"></span>
+          {unreadCount > 0 && (
+            <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center border border-white">
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </span>
+          )}
           <svg
             className="w-4 h-4"
             fill="none"

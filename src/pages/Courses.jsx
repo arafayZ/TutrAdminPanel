@@ -86,7 +86,6 @@ const mapCourseFromBackend = (dto) => ({
   duration: dto.duration,
   totalModules: dto.totalModules,
   completionRate: dto.completionRate,
-  // Features will be built from the detail response
   features: [],
 });
 
@@ -96,17 +95,112 @@ const mapCourseFromBackend = (dto) => ({
 const mapStatusFilter = (status) => {
   if (status === "Available") return "Available";
   if (status === "Unavailable") return "Unavailable";
-  return null; // "All Statuses"
+  return null;
 };
 
 const mapCategoryFilter = (cat) => {
   if (cat === "All Categories") return null;
-  return cat.replace(" ", "_").toUpperCase(); // "O Level" → "O_LEVEL"
+  return cat.replace(" ", "_").toUpperCase();
 };
 
 const mapModeFilter = (mode) => {
   if (mode === "All Modes") return null;
-  return mode.replace(" ", "_").toUpperCase(); // "Student Home" → "STUDENT_HOME"
+  return mode.replace(" ", "_").toUpperCase();
+};
+
+// ============================================================
+// PAGINATION CONTROLS
+// ============================================================
+const Pagination = ({
+  currentPage,
+  totalPages,
+  onPageChange,
+  totalItems,
+  itemsPerPage,
+}) => {
+  if (totalPages <= 1) return null;
+
+  const pages = [];
+  const maxVisible = 5;
+  let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+  let end = Math.min(totalPages, start + maxVisible - 1);
+  if (end - start + 1 < maxVisible) {
+    start = Math.max(1, end - maxVisible + 1);
+  }
+  for (let i = start; i <= end; i++) pages.push(i);
+
+  const startItem = (currentPage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-gray-100 bg-gray-50/30">
+      <span className="text-[11px] text-gray-500 font-medium">
+        Showing{" "}
+        <span className="font-bold text-gray-800">
+          {startItem}–{endItem}
+        </span>{" "}
+        of <span className="font-bold text-gray-800">{totalItems}</span> courses
+      </span>
+
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+        >
+          Prev
+        </button>
+
+        {start > 1 && (
+          <>
+            <button
+              onClick={() => onPageChange(1)}
+              className="w-8 h-8 text-xs font-bold rounded-lg text-gray-700 hover:bg-gray-100 cursor-pointer"
+            >
+              1
+            </button>
+            {start > 2 && <span className="text-gray-400 px-1 text-xs">…</span>}
+          </>
+        )}
+
+        {pages.map((p) => (
+          <button
+            key={p}
+            onClick={() => onPageChange(p)}
+            className={`w-8 h-8 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+              p === currentPage
+                ? "bg-black text-white"
+                : "text-gray-700 hover:bg-gray-100"
+            }`}
+          >
+            {p}
+          </button>
+        ))}
+
+        {end < totalPages && (
+          <>
+            {end < totalPages - 1 && (
+              <span className="text-gray-400 px-1 text-xs">…</span>
+            )}
+            <button
+              onClick={() => onPageChange(totalPages)}
+              className="w-8 h-8 text-xs font-bold rounded-lg text-gray-700 hover:bg-gray-100 cursor-pointer"
+            >
+              {totalPages}
+            </button>
+          </>
+        )}
+
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
 };
 
 // ============================================================
@@ -121,6 +215,10 @@ const CourseManagement = () => {
 
   const [courses, setCourses] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+
+  // ✅ Pagination state
+  const ITEMS_PER_PAGE = 10;
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [studentsCourse, setStudentsCourse] = useState(null);
@@ -151,9 +249,11 @@ const CourseManagement = () => {
 
       const data = await response.json();
       setCourses(data.map(mapCourseFromBackend));
+      setCurrentPage(1); // reset to page 1 whenever filters change
     } catch (err) {
       console.error("Error fetching courses:", err);
       setCourses([]);
+      setCurrentPage(1);
     } finally {
       setIsLoading(false);
     }
@@ -167,6 +267,17 @@ const CourseManagement = () => {
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter, categoryFilter, modeFilter, searchQuery]);
+
+  // ============================================================
+  // DERIVED — Pagination slice
+  // ============================================================
+  const totalCourses = courses.length;
+  const totalPages = Math.ceil(totalCourses / ITEMS_PER_PAGE);
+
+  const paginatedCourses = courses.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE,
+  );
 
   // ============================================================
   // FETCH COURSE DETAILS (for sidebar)
@@ -205,7 +316,6 @@ const CourseManagement = () => {
       });
     } catch (err) {
       console.error("Error fetching course details:", err);
-      // Fallback: show whatever we already have
       setSelectedCourse(course);
     }
   };
@@ -223,7 +333,6 @@ const CourseManagement = () => {
       if (!response.ok) throw new Error("Failed to fetch students");
       const data = await response.json();
 
-      // Map backend → frontend shape
       const mapped = data.map((s) => ({
         id: s.studentId,
         name: s.name,
@@ -399,7 +508,7 @@ const CourseManagement = () => {
   };
 
   // ============================================================
-  // PDF EXPORT (uses current filtered list from backend)
+  // PDF EXPORT — exports ALL filtered courses (not just the page)
   // ============================================================
   const handleExportPDF = () => {
     const doc = new jsPDF();
@@ -534,111 +643,129 @@ const CourseManagement = () => {
                 />
               </div>
               <div className="text-gray-400 text-xs font-medium self-end sm:self-auto pt-1 sm:pt-0">
-                Showing {courses.length} courses
+                Showing{" "}
+                {totalCourses === 0
+                  ? 0
+                  : (currentPage - 1) * ITEMS_PER_PAGE + 1}
+                –{Math.min(currentPage * ITEMS_PER_PAGE, totalCourses)} of{" "}
+                {totalCourses} courses
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-x-auto">
-              <table className="w-full min-w-[760px] text-left border-collapse text-xs">
-                <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50/50 text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">
-                    <th className="py-4 px-6">COURSE</th>
-                    <th className="py-4 px-6">STATUS</th>
-                    <th className="py-4 px-6">MODE</th>
-                    <th className="py-4 px-6">INSTRUCTOR</th>
-                    <th className="py-4 px-6">ENROLLED</th>
-                    <th className="py-4 px-6 text-right">ACTIONS</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {isLoading ? (
-                    <tr>
-                      <td
-                        colSpan="6"
-                        className="py-8 text-center text-gray-400 text-xs font-medium"
-                      >
-                        Loading courses...
-                      </td>
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-xs overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[760px] text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-gray-100 bg-gray-50/50 text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">
+                      <th className="py-4 px-6">COURSE</th>
+                      <th className="py-4 px-6">STATUS</th>
+                      <th className="py-4 px-6">MODE</th>
+                      <th className="py-4 px-6">INSTRUCTOR</th>
+                      <th className="py-4 px-6">ENROLLED</th>
+                      <th className="py-4 px-6 text-right">ACTIONS</th>
                     </tr>
-                  ) : courses.length > 0 ? (
-                    courses.map((course) => (
-                      <tr
-                        key={course.id}
-                        className={`hover:bg-gray-50/50 transition-colors ${
-                          selectedCourse?.id === course.id
-                            ? "bg-gray-50/80"
-                            : ""
-                        }`}
-                      >
-                        <td className="py-4 px-6">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-white border border-gray-100 flex items-center justify-center shrink-0 overflow-hidden">
-                              <img
-                                src={course.thumbnail}
-                                alt={course.title}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                            <div>
-                              <p className="font-bold text-gray-900 text-xs">
-                                {course.title}
-                              </p>
-                              <span className="text-[9px] bg-gray-100 text-gray-500 font-bold px-1.5 py-0.5 rounded tracking-wide uppercase">
-                                {course.category}
-                              </span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-4 px-6">
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                              course.status === "Available"
-                                ? "bg-green-100 text-green-700"
-                                : "bg-red-100 text-red-600"
-                            }`}
-                          >
-                            {course.status}
-                          </span>
-                        </td>
-                        <td className="py-4 px-6 text-gray-700 font-medium">
-                          {course.mode}
-                        </td>
-                        <td className="py-4 px-6 text-gray-700 font-medium">
-                          {course.instructor}
-                        </td>
-                        <td className="py-4 px-6 font-bold text-gray-900">
-                          {course.enrolledStudents} Students
-                        </td>
-                        <td className="py-4 px-6 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => handleOpenStudents(course)}
-                              className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded-lg text-[11px] transition-colors cursor-pointer"
-                            >
-                              View Students
-                            </button>
-                            <button
-                              onClick={() => handleOpenDetails(course)}
-                              className="px-3 py-1 bg-black hover:bg-zinc-800 text-white font-semibold rounded-lg text-[11px] transition-colors cursor-pointer"
-                            >
-                              Details
-                            </button>
-                          </div>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {isLoading ? (
+                      <tr>
+                        <td
+                          colSpan="6"
+                          className="py-8 text-center text-gray-400 text-xs font-medium"
+                        >
+                          Loading courses...
                         </td>
                       </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td
-                        colSpan="6"
-                        className="py-8 text-center text-gray-400 text-xs font-medium"
-                      >
-                        No courses found matching the selected filters.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                    ) : paginatedCourses.length > 0 ? (
+                      paginatedCourses.map((course) => (
+                        <tr
+                          key={course.id}
+                          className={`hover:bg-gray-50/50 transition-colors ${
+                            selectedCourse?.id === course.id
+                              ? "bg-gray-50/80"
+                              : ""
+                          }`}
+                        >
+                          <td className="py-4 px-6">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-white border border-gray-100 flex items-center justify-center shrink-0 overflow-hidden">
+                                <img
+                                  src={course.thumbnail}
+                                  alt={course.title}
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                              <div>
+                                <p className="font-bold text-gray-900 text-xs">
+                                  {course.title}
+                                </p>
+                                <span className="text-[9px] bg-gray-100 text-gray-500 font-bold px-1.5 py-0.5 rounded tracking-wide uppercase">
+                                  {course.category}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            <span
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                                course.status === "Available"
+                                  ? "bg-green-100 text-green-700"
+                                  : "bg-red-100 text-red-600"
+                              }`}
+                            >
+                              {course.status}
+                            </span>
+                          </td>
+                          <td className="py-4 px-6 text-gray-700 font-medium">
+                            {course.mode}
+                          </td>
+                          <td className="py-4 px-6 text-gray-700 font-medium">
+                            {course.instructor}
+                          </td>
+                          <td className="py-4 px-6 font-bold text-gray-900">
+                            {course.enrolledStudents} Students
+                          </td>
+                          <td className="py-4 px-6 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => handleOpenStudents(course)}
+                                className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold rounded-lg text-[11px] transition-colors cursor-pointer"
+                              >
+                                View Students
+                              </button>
+                              <button
+                                onClick={() => handleOpenDetails(course)}
+                                className="px-3 py-1 bg-black hover:bg-zinc-800 text-white font-semibold rounded-lg text-[11px] transition-colors cursor-pointer"
+                              >
+                                Details
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan="6"
+                          className="py-8 text-center text-gray-400 text-xs font-medium"
+                        >
+                          No courses found matching the selected filters.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination */}
+              {!isLoading && paginatedCourses.length > 0 && (
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                  totalItems={totalCourses}
+                  itemsPerPage={ITEMS_PER_PAGE}
+                />
+              )}
             </div>
           </div>
         )}
