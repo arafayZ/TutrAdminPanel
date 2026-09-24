@@ -1,10 +1,14 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
-import Sidebar from '../components/Sidebar';
-import Navbar from '../components/Navbar';
-import NotificationsPage from './NotificationsPage';
+import React, { useState, useRef, useEffect } from "react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import Sidebar from "../components/Sidebar";
+import Navbar from "../components/Navbar";
+import NotificationsPage from "./NotificationsPage";
+import { adminFetch, getImageUrl } from "../api/adminClient";
 
+// ============================================================
+// CUSTOM DROPDOWN
+// ============================================================
 const CustomDropdown = ({ label, value, onChange, options }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -15,11 +19,8 @@ const CustomDropdown = ({ label, value, onChange, options }) => {
         setIsOpen(false);
       }
     };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   return (
@@ -30,8 +31,18 @@ const CustomDropdown = ({ label, value, onChange, options }) => {
         className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium rounded-lg px-3 py-1.5 text-xs outline-none cursor-pointer flex items-center justify-between gap-2 transition-colors"
       >
         <span>{value || label}</span>
-        <svg className="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+        <svg
+          className="w-3 h-3 text-gray-500"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M19 9l-7 7-7-7"
+          />
         </svg>
       </button>
 
@@ -46,8 +57,8 @@ const CustomDropdown = ({ label, value, onChange, options }) => {
               }}
               className={`w-full text-left px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors ${
                 value === option
-                  ? 'bg-black text-white'
-                  : 'text-gray-700 hover:bg-gray-100'
+                  ? "bg-black text-white"
+                  : "text-gray-700 hover:bg-gray-100"
               }`}
             >
               {option}
@@ -59,339 +70,365 @@ const CustomDropdown = ({ label, value, onChange, options }) => {
   );
 };
 
+// ============================================================
+// HELPERS
+// ============================================================
+const formatCategory = (cat) => {
+  if (!cat) return "—";
+  return cat
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
+const formatMode = (mode) => {
+  if (!mode) return "—";
+  return mode
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
+const formatDate = (dt) => {
+  if (!dt) return "—";
+  const d = new Date(dt);
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+  });
+};
+
+const fallbackAvatar = (name = "") => {
+  const initials = (name || "S T")
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(
+    initials,
+  )}&background=E5E7EB&color=374151&bold=true&size=128`;
+};
+
+const getAvatarSrc = (url, name) => {
+  if (url && typeof url === "string" && url.trim() !== "") return url;
+  return fallbackAvatar(name);
+};
+
+// ============================================================
+// MAPPER — Backend DTO → Frontend shape
+// ============================================================
+const mapReviewFromBackend = (dto) => ({
+  id: dto.id,
+  studentName: dto.studentName,
+  avatar: getImageUrl(dto.studentImage) || fallbackAvatar(dto.studentName),
+  course: dto.courseSubject,
+  category: formatCategory(dto.category),
+  mode: formatMode(dto.mode),
+  tutor: dto.tutorName,
+  date: formatDate(dto.createdAt),
+  rating: dto.rating,
+  comment: dto.review ? `"${dto.review}"` : "",
+});
+
+// ============================================================
+// STARS
+// ============================================================
+const StarRating = ({ count }) => (
+  <div className="flex items-center gap-0.5 text-black">
+    {[1, 2, 3, 4, 5].map((star) => (
+      <span key={star} className="text-xs">
+        {star <= count ? "★" : "☆"}
+      </span>
+    ))}
+  </div>
+);
+
+// ============================================================
+// MAIN COMPONENT
+// ============================================================
 const ReviewsPage = () => {
-  // Navigation & View States
-  const [activePage, setActivePage] = useState('reviews');
-  const [viewState, setViewState] = useState('reviews');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [activePage] = useState("reviews");
+  const [viewState, setViewState] = useState("reviews");
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Filter States
-  const [tutorFilter, setTutorFilter] = useState('All Tutors');
-  const [modeFilter, setModeFilter] = useState('All Modes');
-  const [ratingFilter, setRatingFilter] = useState('All Ratings');
+  const [tutorFilter, setTutorFilter] = useState("All Tutors");
+  const [modeFilter, setModeFilter] = useState("All Modes");
+  const [ratingFilter, setRatingFilter] = useState("All Ratings");
+  const [categoryFilter, setCategoryFilter] = useState("All Categories");
 
-  // Modal States (White Popups)
-  const [selectedReview, setSelectedReview] = useState(null);
-  const [actionReview, setActionReview] = useState(null);
+  // Data
+  const [reviews, setReviews] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Reviews Data
-  const [reviews, setReviews] = useState([
-    {
-      id: 1,
-      studentName: 'Ayesha Khan',
-      avatar:
-        'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80',
-      course: 'Mathematics',
-      mode: 'Online',
-      tutor: 'Dr. Hamza Ahmed',
-      date: 'Aug 05, 2026',
-      rating: 5,
-      isReported: false,
-      comment:
-        '"Dr. Hamza explained calculus concepts very clearly. I was struggling with integration, but after a few sessions I became much more confident. Highly recommended!"',
-      tags: ['VERIFIED', 'HELPFUL (18)'],
-      tagTypes: ['neutral', 'neutral'],
-    },
-    {
-      id: 2,
-      studentName: 'Muhammad Huzaifa',
-      avatar:
-        'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80',
-      course: 'Physics',
-      mode: "Student's Home",
-      tutor: 'Usman Raza',
-      date: 'Aug 03, 2026',
-      rating: 4,
-      isReported: false,
-      comment:
-        '"Usman is very good at explaining difficult physics topics. His examples made mechanics much easier to understand. I would definitely book another session."',
-      tags: ['VERIFIED', 'HELPFUL (11)'],
-      tagTypes: ['neutral', 'neutral'],
-    },
-    {
-      id: 3,
-      studentName: 'Fatima Zahra',
-      avatar:
-        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
-      course: 'Computer Science',
-      mode: 'Online',
-      tutor: 'Abdul Rehman',
-      date: 'Jul 30, 2026',
-      rating: 5,
-      isReported: false,
-      comment:
-        '"Abdul Rehman helped me understand data structures and algorithms from the basics. He explains every step patiently and also gives useful practice questions."',
-      tags: ['VERIFIED', 'HELPFUL (15)'],
-      tagTypes: ['neutral', 'neutral'],
-    },
-    {
-      id: 4,
-      studentName: 'Ali Hassan',
-      avatar:
-        'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80',
-      course: 'English',
-      mode: "Tutor's Home",
-      tutor: 'Sana Malik',
-      date: 'Jul 27, 2026',
-      rating: 5,
-      isReported: false,
-      comment:
-        '"Sana helped me improve both my grammar and speaking skills. The sessions are interactive and she always corrects my mistakes in a very professional way."',
-      tags: ['VERIFIED', 'HELPFUL (9)'],
-      tagTypes: ['neutral', 'neutral'],
-    },
-    {
-      id: 5,
-      studentName: 'Hira Noor',
-      avatar:
-        'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&auto=format&fit=crop&q=80',
-      course: 'Chemistry',
-      mode: "Student's Home",
-      tutor: 'Dr. Ahmed Farooq',
-      date: 'Jul 24, 2026',
-      rating: 3,
-      isReported: false,
-      comment:
-        '"The tutor has good knowledge of chemistry and explained organic chemistry well. However, the session felt a little rushed and I would have preferred more time for practice questions."',
-      tags: ['VERIFIED', 'HELPFUL (5)'],
-      tagTypes: ['neutral', 'neutral'],
-    },
-    {
-      id: 6,
-      studentName: 'Hamza Siddiqui',
-      avatar:
-        'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&auto=format&fit=crop&q=80',
-      course: 'Web Development',
-      mode: 'Online',
-      tutor: 'Bilal Hassan',
-      date: 'Jul 21, 2026',
-      rating: 5,
-      isReported: false,
-      comment:
-        '"Bilal is an excellent web development tutor. He helped me understand React components and state management with practical examples. Very helpful and knowledgeable."',
-      tags: ['VERIFIED', 'HELPFUL (21)'],
-      tagTypes: ['neutral', 'neutral'],
-    },
-    {
-      id: 7,
-      studentName: 'Maham Asif',
-      avatar:
-        'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=100&auto=format&fit=crop&q=80',
-      course: 'Biology',
-      mode: "Tutor's Home",
-      tutor: 'Dr. Ayesha Siddiqui',
-      date: 'Jul 18, 2026',
-      rating: 4,
-      isReported: false,
-      comment:
-        '"Dr. Ayesha explains biology concepts with diagrams and real-life examples. The lessons were very useful for my exam preparation. I would recommend her to other students."',
-      tags: ['VERIFIED', 'HELPFUL (8)'],
-      tagTypes: ['neutral', 'neutral'],
-    },
-    {
-      id: 8,
-      studentName: 'Saad Ahmed',
-      avatar:
-        'https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?w=100&auto=format&fit=crop&q=80',
-      course: 'Accounting',
-      mode: 'Online',
-      tutor: 'Usama Khalid',
-      date: 'Jul 15, 2026',
-      rating: 2,
-      isReported: true,
-      comment:
-        '"The tutor joined the session late and we were unable to cover all the topics I had requested. I also had difficulty getting a response after the session regarding the remaining questions."',
-      tags: ['REPORTED', 'CRITICAL'],
-      tagTypes: ['red', 'neutral'],
-    },
-    {
-      id: 9,
-      studentName: 'Eman Fatima',
-      avatar:
-        'https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=100&auto=format&fit=crop&q=80',
-      course: 'Statistics',
-      mode: 'Online',
-      tutor: 'Dr. Zainab Ali',
-      date: 'Jul 12, 2026',
-      rating: 5,
-      isReported: false,
-      comment:
-        '"Dr. Zainab made statistics much easier for me. She explained probability distributions step by step and provided excellent examples for practice."',
-      tags: ['VERIFIED', 'HELPFUL (14)'],
-      tagTypes: ['neutral', 'neutral'],
-    },
-    {
-      id: 10,
-      studentName: 'Ahmed Raza',
-      avatar:
-        'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=80',
-      course: 'Programming Fundamentals',
-      mode: "Student's Home",
-      tutor: 'Owais Ahmed',
-      date: 'Jul 09, 2026',
-      rating: 4,
-      isReported: false,
-      comment:
-        '"Owais helped me understand programming fundamentals and debugging. He was patient throughout the session and gave me several exercises to practice afterwards."',
-      tags: ['VERIFIED', 'HELPFUL (10)'],
-      tagTypes: ['neutral', 'neutral'],
-    },
-    {
-      id: 11,
-      studentName: 'Adil Ahmed',
-      avatar:
-        'https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?w=100&auto=format&fit=crop&q=80',
-      course: 'Urdu',
-      mode: "Tutor's Home",
-      tutor: 'Usama Qureshi',
-      date: 'Jul 13, 2026',
-      rating: 2,
-      isReported: true,
-      comment:
-        '"The tutor joined the session late and we were unable to cover all the topics I had requested. I also had difficulty getting a response after the session regarding the remaining questions."',
-      tags: ['REPORTED', 'CRITICAL'],
-      tagTypes: ['red', 'neutral'],
-    },
-  ]);
+  // ✅ Tutors list (only ACTIVE, INACTIVE, SUSPENDED)
+  const [tutorList, setTutorList] = useState([]); // { id, name }
 
-  const StarRating = ({ count }) => (
-    <div className="flex items-center gap-0.5 text-black">
-      {[1, 2, 3, 4, 5].map((star) => (
-        <span key={star} className="text-xs">
-          {star <= count ? '★' : '☆'}
-        </span>
-      ))}
-    </div>
-  );
-
-  const filteredReviews = reviews.filter((rev) => {
-    const matchesSearch =
-      rev.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      rev.course.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      rev.tutor.toLowerCase().includes(searchQuery.toLowerCase());
-
-    const matchesTutor =
-      tutorFilter === 'All Tutors' || rev.tutor === tutorFilter;
-
-    const matchesMode =
-      modeFilter === 'All Modes' || rev.mode === modeFilter;
-
-    const matchesRating =
-      ratingFilter === 'All Ratings' ||
-      (ratingFilter === '5 Stars' && rev.rating === 5) ||
-      (ratingFilter === '4 Stars' && rev.rating === 4) ||
-      (ratingFilter === '1 Star' && rev.rating === 1);
-
-    return matchesSearch && matchesTutor && matchesMode && matchesRating;
+  // Stats
+  const [stats, setStats] = useState({
+    averageRating: 0,
+    totalReviews: 0,
+    positiveRatio: 0,
+    negativeRatio: 0,
+    distribution: { five: 0, four: 0, three: 0, two: 0, one: 0 },
   });
 
-  const tutorOptions = [
-    'All Tutors',
-    'Dr. Hamza Ahmed',
-    'Usman Raza',
-    'Abdul Rehman',
-    'Sana Malik',
-    'Dr. Ahmed Farooq',
-    'Bilal Hassan',
-    'Dr. Ayesha Siddiqui',
-    'Usama Khalid',
-    'Dr. Zainab Ali',
-    'Owais Ahmed',
-    'Usama Qureshi',
-  ];
+  // Modal States
+  const [selectedReview, setSelectedReview] = useState(null);
+  const [actionReview, setActionReview] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  const modeOptions = ['All Modes', 'Online', "Student's Home", "Tutor's Home"];
-  const ratingOptions = ['All Ratings', '5 Stars', '4 Stars', '1 Star'];
+  // ============================================================
+  // FETCH TUTORS (only ACTIVE + INACTIVE + SUSPENDED)
+  // ============================================================
+  const fetchTutors = async () => {
+    try {
+      const [activeRes, inactiveRes, suspendedRes] = await Promise.all([
+        adminFetch("/api/admin/tutors/filter", {
+          method: "POST",
+          body: JSON.stringify({ status: "ACTIVE" }),
+        }),
+        adminFetch("/api/admin/tutors/filter", {
+          method: "POST",
+          body: JSON.stringify({ status: "INACTIVE" }),
+        }),
+        adminFetch("/api/admin/tutors/filter", {
+          method: "POST",
+          body: JSON.stringify({ status: "SUSPENDED" }),
+        }),
+      ]);
 
-  const loadPDFScripts = () => {
-    return new Promise((resolve, reject) => {
-      if (window.jspdf && window.jspdf.jsPDF) {
-        resolve(window.jspdf);
-        return;
-      }
+      const [activeData, inactiveData, suspendedData] = await Promise.all([
+        activeRes.ok ? activeRes.json() : [],
+        inactiveRes.ok ? inactiveRes.json() : [],
+        suspendedRes.ok ? suspendedRes.json() : [],
+      ]);
 
-      const script1 = document.createElement('script');
-      script1.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-      script1.onload = () => {
-        const script2 = document.createElement('script');
-        script2.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js';
-        script2.onload = () => resolve(window.jspdf);
-        script2.onerror = reject;
-        document.body.appendChild(script2);
-      };
-      script1.onerror = reject;
-      document.body.appendChild(script1);
-    });
+      const all = [
+        ...(Array.isArray(activeData) ? activeData : []),
+        ...(Array.isArray(inactiveData) ? inactiveData : []),
+        ...(Array.isArray(suspendedData) ? suspendedData : []),
+      ];
+
+      setTutorList(all.map((t) => ({ id: t.id, name: t.name })));
+    } catch (err) {
+      console.error("Failed to fetch tutors:", err);
+      setTutorList([]);
+    }
   };
 
+  // ============================================================
+  // FETCH REVIEWS
+  // ============================================================
+  const fetchReviews = async () => {
+    setIsLoading(true);
+    try {
+      // Resolve tutor name → ID
+      let tutorId = null;
+      if (tutorFilter !== "All Tutors") {
+        const found = tutorList.find((t) => t.name === tutorFilter);
+        if (found) tutorId = found.id;
+      }
+
+      const payload = {
+        tutorId,
+        category:
+          categoryFilter === "All Categories"
+            ? null
+            : categoryFilter.replace(" ", "_").toUpperCase(),
+        mode:
+          modeFilter === "All Modes"
+            ? null
+            : modeFilter.replace("'", "").replace(" ", "_").toUpperCase(),
+        rating:
+          ratingFilter === "All Ratings" ? null : parseInt(ratingFilter, 10),
+        searchQuery: searchQuery.trim() || null,
+      };
+
+      const res = await adminFetch("/api/admin/reviews/filter", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error("Failed to fetch reviews");
+      const data = await res.json();
+      setReviews(data.map(mapReviewFromBackend));
+    } catch (err) {
+      console.error("Failed to fetch reviews:", err);
+      setReviews([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ============================================================
+  // FETCH STATS
+  // ============================================================
+  const fetchStats = async () => {
+    try {
+      const res = await adminFetch("/api/admin/reviews/stats");
+      if (!res.ok) return;
+      const data = await res.json();
+      setStats(data);
+    } catch (err) {
+      console.error("Failed to fetch stats:", err);
+    }
+  };
+
+  // Load tutors once on mount
+  useEffect(() => {
+    fetchTutors();
+    fetchStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Refetch reviews when filters/search change (debounced)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      fetchReviews();
+    }, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    tutorFilter,
+    modeFilter,
+    ratingFilter,
+    categoryFilter,
+    searchQuery,
+    tutorList,
+  ]);
+
+  // ============================================================
+  // DELETE REVIEW
+  // ============================================================
+  const handleDeleteReview = async () => {
+    if (!actionReview) return;
+    setIsDeleting(true);
+    try {
+      const res = await adminFetch(`/api/admin/reviews/${actionReview.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Delete failed");
+      setActionReview(null);
+      await fetchReviews();
+      await fetchStats();
+    } catch (err) {
+      console.error("Delete review failed:", err);
+      alert("Failed to delete review. Please try again.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // ============================================================
+  // OPTIONS
+  // ============================================================
+  const tutorOptions = ["All Tutors", ...tutorList.map((t) => t.name)];
+  const modeOptions = ["All Modes", "Online", "Student's Home", "Tutor's Home"];
+  const ratingOptions = [
+    "All Ratings",
+    "5 Stars",
+    "4 Stars",
+    "3 Stars",
+    "2 Stars",
+    "1 Star",
+  ];
+  const categoryOptions = [
+    "All Categories",
+    "O Level",
+    "A Level",
+    "Entry Test",
+    "Matric",
+    "Intermediate",
+  ];
+
+  // ============================================================
+  // PDF EXPORT
+  // ============================================================
   const handleExportData = async () => {
-    if (filteredReviews.length === 0) {
-      alert('No data available to export.');
+    if (reviews.length === 0) {
+      alert("No data available to export.");
       return;
     }
 
     try {
-      await loadPDFScripts();
-      const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
-
       doc.setFontSize(18);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Student Reviews Report', 14, 20);
+      doc.setFont("helvetica", "bold");
+      doc.text("Student Reviews Report", 14, 20);
 
       doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
+      doc.setFont("helvetica", "normal");
       doc.setTextColor(100);
       doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 26);
-      doc.text(`Total Entries: ${filteredReviews.length}`, 14, 31);
+      doc.text(`Total Entries: ${reviews.length}`, 14, 31);
 
-      const headers = [['ID', 'Student Name', 'Course', 'Mode', 'Tutor', 'Rating', 'Date', 'Reported', 'Comment']];
+      const headers = [
+        [
+          "ID",
+          "Student Name",
+          "Course",
+          "Category",
+          "Mode",
+          "Tutor",
+          "Rating",
+          "Date",
+          "Comment",
+        ],
+      ];
 
-      const rows = filteredReviews.map((rev) => [
+      const rows = reviews.map((rev) => [
         rev.id,
         rev.studentName,
         rev.course,
+        rev.category,
         rev.mode,
         rev.tutor,
         `${rev.rating} Stars`,
         rev.date,
-        rev.isReported ? 'Yes' : 'No',
-        rev.comment.replace(/^"|"$/g, ''),
+        rev.comment.replace(/^"|"$/g, ""),
       ]);
 
-      doc.autoTable({
+      autoTable(doc, {
         head: headers,
         body: rows,
         startY: 38,
-        theme: 'striped',
-        headStyles: { fillColor: [24, 24, 27], textColor: [255, 255, 255], fontStyle: 'bold' },
+        theme: "striped",
+        headStyles: {
+          fillColor: [24, 24, 27],
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+        },
         styles: { fontSize: 8, cellPadding: 3 },
         columnStyles: {
-          0: { cellWidth: 10 },
-          1: { cellWidth: 22 },
-          2: { cellWidth: 22 },
-          3: { cellWidth: 22 },
-          4: { cellWidth: 22 },
-          5: { cellWidth: 16 },
-          6: { cellWidth: 20 },
-          7: { cellWidth: 16 },
-          8: { cellWidth: 'auto' },
+          0: { cellWidth: 8 },
+          1: { cellWidth: 20 },
+          2: { cellWidth: 20 },
+          3: { cellWidth: 18 },
+          4: { cellWidth: 18 },
+          5: { cellWidth: 20 },
+          6: { cellWidth: 14 },
+          7: { cellWidth: 18 },
+          8: { cellWidth: "auto" },
         },
       });
 
       doc.save(`reviews_export_${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch (err) {
-      console.error('Error exporting PDF:', err);
-      alert('Failed to generate PDF export. Please try again.');
+      console.error("Error exporting PDF:", err);
+      alert("Failed to generate PDF export. Please try again.");
     }
   };
 
+  // ============================================================
+  // RENDER
+  // ============================================================
   return (
     <div className="flex h-screen bg-[#F8F9FB] font-sans text-gray-900 overflow-hidden">
-      <Sidebar
-        activePage={activePage}
-        onGenerateReport={() => alert('Generating Reviews Summary Report...')}
-      />
+      <Sidebar activePage={activePage} onGenerateReport={handleExportData} />
 
       <main className="flex-1 flex flex-col overflow-y-auto">
         <Navbar
@@ -399,11 +436,11 @@ const ReviewsPage = () => {
           setSearchQuery={setSearchQuery}
           viewState={viewState}
           setViewState={setViewState}
-          placeholder="Search tutors or applications..."
+          placeholder="Search students, tutors, or courses..."
         />
 
-        {viewState === 'notifications' ? (
-          <NotificationsPage onBack={() => setViewState('reviews')} />
+        {viewState === "notifications" ? (
+          <NotificationsPage onBack={() => setViewState("reviews")} />
         ) : (
           <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
             <div className="flex items-center justify-between">
@@ -412,7 +449,8 @@ const ReviewsPage = () => {
                   Student Reviews
                 </h2>
                 <p className="text-xs text-gray-500 mt-1">
-                  Manage community integrity and monitor instructional quality across all active courses.
+                  Manage community integrity and monitor instructional quality
+                  across all active courses.
                 </p>
               </div>
 
@@ -439,7 +477,7 @@ const ReviewsPage = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-4">
-                {/* Custom Filter Bar */}
+                {/* Filter Bar */}
                 <div className="bg-white p-3 rounded-2xl border border-gray-100 flex items-center justify-between text-xs flex-wrap gap-2">
                   <div className="flex items-center gap-3 flex-wrap">
                     <CustomDropdown
@@ -448,14 +486,18 @@ const ReviewsPage = () => {
                       onChange={setTutorFilter}
                       options={tutorOptions}
                     />
-
                     <CustomDropdown
                       label="Select Mode"
                       value={modeFilter}
                       onChange={setModeFilter}
                       options={modeOptions}
                     />
-
+                    <CustomDropdown
+                      label="Select Category"
+                      value={categoryFilter}
+                      onChange={setCategoryFilter}
+                      options={categoryOptions}
+                    />
                     <CustomDropdown
                       label="Select Rating"
                       value={ratingFilter}
@@ -464,90 +506,95 @@ const ReviewsPage = () => {
                     />
                   </div>
                   <span className="text-gray-400 text-[11px] font-medium">
-                    Showing {filteredReviews.length} entries
+                    Showing {reviews.length} entries
                   </span>
                 </div>
 
                 {/* Reviews List */}
                 <div className="space-y-4">
-                  {filteredReviews.map((rev) => (
-                    <div
-                      key={rev.id}
-                      className={`bg-white rounded-2xl p-5 border ${
-                        rev.isReported ? 'border-red-200 shadow-xs' : 'border-gray-100'
-                      } space-y-4 hover:border-gray-300 transition-all`}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={rev.avatar}
-                            alt={rev.studentName}
-                            className="w-10 h-10 rounded-full object-cover"
-                          />
-                          <div>
-                            <div className="flex items-center gap-2">
+                  {isLoading ? (
+                    <div className="bg-white rounded-2xl p-12 text-center text-xs text-gray-400 border border-gray-100">
+                      Loading reviews...
+                    </div>
+                  ) : reviews.length === 0 ? (
+                    <div className="bg-white rounded-2xl p-12 text-center text-xs text-gray-400 border border-gray-100">
+                      No reviews found matching the selected filters.
+                    </div>
+                  ) : (
+                    reviews.map((rev) => (
+                      <div
+                        key={rev.id}
+                        className="bg-white rounded-2xl p-5 border border-gray-100 space-y-4 hover:border-gray-300 transition-all"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={rev.avatar}
+                              alt={rev.studentName}
+                              className="w-10 h-10 rounded-full object-cover"
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src = fallbackAvatar(rev.studentName);
+                              }}
+                            />
+                            <div>
                               <h4 className="font-bold text-gray-900 text-sm">
                                 {rev.studentName}
                               </h4>
-                              {rev.isReported && (
-                                <span className="bg-red-100 text-red-600 text-[9px] font-extrabold px-1.5 py-0.5 rounded tracking-wide uppercase">
-                                  REPORTED
+                              <p className="text-[11px] text-gray-500">
+                                Course:{" "}
+                                <span className="font-medium text-gray-800">
+                                  {rev.course}
+                                </span>{" "}
+                                • Category:{" "}
+                                <span className="font-medium text-gray-800">
+                                  {rev.category}
+                                </span>{" "}
+                                • Mode:{" "}
+                                <span className="font-medium text-gray-800">
+                                  {rev.mode}
+                                </span>{" "}
+                                • Tutor:{" "}
+                                <span className="font-medium text-gray-800">
+                                  {rev.tutor}
                                 </span>
-                              )}
+                              </p>
                             </div>
-                            <p className="text-[11px] text-gray-500">
-                              Course: <span className="font-medium text-gray-800">{rev.course}</span> • Mode: <span className="font-medium text-gray-800">{rev.mode}</span> • Tutor: <span className="font-medium text-gray-800">{rev.tutor}</span>
-                            </p>
+                          </div>
+
+                          <div className="text-right">
+                            <StarRating count={rev.rating} />
+                            <span className="text-[10px] text-gray-400 font-medium block mt-1">
+                              {rev.date}
+                            </span>
                           </div>
                         </div>
 
-                        <div className="text-right">
-                          <StarRating count={rev.rating} />
-                          <span className="text-[10px] text-gray-400 font-medium block mt-1">
-                            {rev.date}
-                          </span>
-                        </div>
-                      </div>
+                        {rev.comment && (
+                          <p className="text-xs text-gray-700 leading-relaxed italic">
+                            {rev.comment}
+                          </p>
+                        )}
 
-                      <p className="text-xs text-gray-700 leading-relaxed italic">
-                        {rev.comment}
-                      </p>
-
-                      <div className="flex items-center justify-between pt-1">
-                        <div className="flex items-center gap-2">
-                          {rev.tags.map((tag, idx) => (
-                            <span
-                              key={idx}
-                              className={`text-[9px] font-bold px-2 py-0.5 rounded tracking-wider uppercase ${
-                                rev.tagTypes[idx] === 'red'
-                                  ? 'bg-red-100 text-red-600'
-                                  : 'bg-gray-100 text-gray-500'
-                              }`}
-                            >
-                              {tag}
+                        <div className="flex items-center justify-between pt-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-bold px-2 py-0.5 rounded tracking-wider uppercase bg-gray-100 text-gray-500">
+                              VERIFIED
                             </span>
-                          ))}
-                        </div>
+                          </div>
 
-                        <div className="flex items-center gap-2">
-                          {rev.isReported && (
+                          <div className="flex items-center gap-2">
                             <button
-                              onClick={() => setActionReview(rev)}
-                              className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold text-[11px] rounded-lg transition-colors cursor-pointer"
+                              onClick={() => setSelectedReview(rev)}
+                              className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold text-[11px] rounded-lg transition-colors cursor-pointer"
                             >
-                              Take Action
+                              View Details
                             </button>
-                          )}
-                          <button
-                            onClick={() => setSelectedReview(rev)}
-                            className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold text-[11px] rounded-lg transition-colors cursor-pointer"
-                          >
-                            View Details
-                          </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
 
@@ -557,81 +604,62 @@ const ReviewsPage = () => {
                   <span className="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">
                     AVERAGE PLATFORM RATING
                   </span>
-                  <div className="text-4xl font-extrabold text-gray-900">4.8</div>
+                  <div className="text-4xl font-extrabold text-gray-900">
+                    {stats.averageRating}
+                  </div>
                   <div className="flex justify-center">
-                    <StarRating count={5} />
+                    <StarRating count={Math.round(stats.averageRating)} />
                   </div>
                   <div className="grid grid-cols-2 gap-2 pt-3 border-t border-gray-100 text-center">
                     <div>
                       <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
                         TOTAL REVIEWS
                       </p>
-                      <p className="text-base font-bold text-gray-900 mt-0.5">12,482</p>
+                      <p className="text-base font-bold text-gray-900 mt-0.5">
+                        {stats.totalReviews.toLocaleString()}
+                      </p>
                     </div>
                     <div>
                       <p className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
                         POS/NEG RATIO
                       </p>
-                      <p className="text-base font-bold text-gray-900 mt-0.5">94% / 6%</p>
+                      <p className="text-base font-bold text-gray-900 mt-0.5">
+                        {stats.positiveRatio}% / {stats.negativeRatio}%
+                      </p>
                     </div>
                   </div>
                 </div>
 
                 <div className="bg-white p-5 rounded-2xl border border-gray-100 space-y-3">
-                  <h4 className="text-xs font-bold text-gray-900">Rating Distribution</h4>
+                  <h4 className="text-xs font-bold text-gray-900">
+                    Rating Distribution
+                  </h4>
                   <div className="space-y-2">
                     {[
-                      { stars: 5, pct: '82%', width: '82%' },
-                      { stars: 4, pct: '12%', width: '12%' },
-                      { stars: 3, pct: '4%', width: '4%' },
-                      { stars: 2, pct: '1.5%', width: '1.5%' },
-                      { stars: 1, pct: '0.5%', width: '0.5%' },
+                      { stars: 5, pct: stats.distribution.five },
+                      { stars: 4, pct: stats.distribution.four },
+                      { stars: 3, pct: stats.distribution.three },
+                      { stars: 2, pct: stats.distribution.two },
+                      { stars: 1, pct: stats.distribution.one },
                     ].map((row) => (
-                      <div key={row.stars} className="flex items-center gap-3 text-[11px]">
-                        <span className="w-2 font-bold text-gray-600">{row.stars}</span>
+                      <div
+                        key={row.stars}
+                        className="flex items-center gap-3 text-[11px]"
+                      >
+                        <span className="w-2 font-bold text-gray-600">
+                          {row.stars}
+                        </span>
                         <div className="flex-1 bg-gray-100 h-2 rounded-full overflow-hidden">
                           <div
                             className="bg-black h-full rounded-full"
-                            style={{ width: row.width }}
+                            style={{ width: `${row.pct}%` }}
                           ></div>
                         </div>
-                        <span className="w-8 text-right text-gray-400 font-medium text-[10px]">
-                          {row.pct}
+                        <span className="w-10 text-right text-gray-400 font-medium text-[10px]">
+                          {row.pct}%
                         </span>
                       </div>
                     ))}
-                  </div>
-                </div>
-
-                <div className="bg-black text-white p-5 rounded-2xl space-y-4">
-                  <h4 className="text-xs font-bold tracking-tight">Review Growth</h4>
-                  <div className="flex items-end justify-between h-16 pt-2 px-2 gap-2">
-                    <div className="w-1/5 bg-zinc-800 h-1/2 rounded-t"></div>
-                    <div className="w-1/5 bg-zinc-700 h-3/4 rounded-t"></div>
-                    <div className="w-1/5 bg-zinc-600 h-2/3 rounded-t"></div>
-                    <div className="w-1/5 bg-zinc-500 h-4/5 rounded-t"></div>
-                    <div className="w-1/5 bg-white h-full rounded-t"></div>
-                  </div>
-                  <div className="flex justify-between text-[9px] text-gray-400 font-bold uppercase tracking-wider px-1">
-                    <span>JUN</span>
-                    <span>NOV</span>
-                  </div>
-                </div>
-
-                <div className="bg-red-50/60 border border-red-100 rounded-2xl p-4 space-y-2 cursor-pointer hover:bg-red-100/50 transition-colors">
-                  <div className="flex items-center justify-between text-red-600 font-bold text-xs">
-                    <span className="flex items-center gap-2">⚠️ Action Required</span>
-                  </div>
-                  <div className="bg-white p-3 rounded-xl border border-red-100 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="bg-red-100 text-red-600 text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase">
-                        PAYMENT ISSUES
-                      </span>
-                      <span className="text-[9px] text-gray-400">2m ago</span>
-                    </div>
-                    <p className="text-[11px] text-gray-700 font-medium truncate">
-                      Inappropriate language used by user #4928...
-                    </p>
                   </div>
                 </div>
               </div>
@@ -640,7 +668,7 @@ const ReviewsPage = () => {
         )}
       </main>
 
-      {/* Details Modal (White Pop-up Container) */}
+      {/* Details Modal */}
       {selectedReview && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full border border-gray-100 shadow-2xl space-y-4">
@@ -650,6 +678,10 @@ const ReviewsPage = () => {
                   src={selectedReview.avatar}
                   alt={selectedReview.studentName}
                   className="w-10 h-10 rounded-full object-cover"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = fallbackAvatar(selectedReview.studentName);
+                  }}
                 />
                 <div>
                   <h4 className="font-bold text-gray-900 text-sm">
@@ -668,23 +700,47 @@ const ReviewsPage = () => {
 
             <div className="space-y-2 text-xs text-gray-700">
               <p>
-                <strong className="text-gray-900">Course:</strong> {selectedReview.course}
+                <strong className="text-gray-900">Course:</strong>{" "}
+                {selectedReview.course}
               </p>
               <p>
-                <strong className="text-gray-900">Mode:</strong> {selectedReview.mode}
+                <strong className="text-gray-900">Category:</strong>{" "}
+                {selectedReview.category}
               </p>
               <p>
-                <strong className="text-gray-900">Tutor:</strong> {selectedReview.tutor}
+                <strong className="text-gray-900">Mode:</strong>{" "}
+                {selectedReview.mode}
               </p>
-              <div className="pt-2">
-                <strong className="text-gray-900 block mb-1">Feedback:</strong>
-                <p className="bg-gray-50 p-3 rounded-xl border border-gray-100 italic text-gray-800">
-                  {selectedReview.comment}
-                </p>
-              </div>
+              <p>
+                <strong className="text-gray-900">Tutor:</strong>{" "}
+                {selectedReview.tutor}
+              </p>
+              <p>
+                <strong className="text-gray-900">Rating:</strong>{" "}
+                {selectedReview.rating} / 5
+              </p>
+              {selectedReview.comment && (
+                <div className="pt-2">
+                  <strong className="text-gray-900 block mb-1">
+                    Feedback:
+                  </strong>
+                  <p className="bg-gray-50 p-3 rounded-xl border border-gray-100 italic text-gray-800">
+                    {selectedReview.comment}
+                  </p>
+                </div>
+              )}
             </div>
 
-            <div className="flex items-center justify-end pt-2">
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100">
+              <button
+                onClick={() => {
+                  setActionReview(selectedReview);
+                  setSelectedReview(null);
+                }}
+                className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+              >
+                Remove Review
+              </button>
               <button
                 onClick={() => setSelectedReview(null)}
                 className="px-4 py-2 bg-black hover:bg-zinc-800 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
@@ -696,46 +752,39 @@ const ReviewsPage = () => {
         </div>
       )}
 
-      {/* Action Resolution Modal (White Pop-up Container) */}
+      {/* Confirm Delete Modal */}
       {actionReview && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full border border-gray-100 shadow-2xl space-y-4">
             <div>
-              <h4 className="text-base font-bold text-gray-900">Review Resolution</h4>
+              <h4 className="text-base font-bold text-gray-900">
+                Remove Review
+              </h4>
               <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                Take moderation action for reported review from <span className="font-semibold text-gray-900">{actionReview.studentName}</span> regarding tutor <span className="font-semibold text-gray-900">{actionReview.tutor}</span>.
+                Are you sure you want to permanently remove the review from{" "}
+                <span className="font-semibold text-gray-900">
+                  {actionReview.studentName}
+                </span>{" "}
+                regarding tutor{" "}
+                <span className="font-semibold text-gray-900">
+                  {actionReview.tutor}
+                </span>
+                ? This cannot be undone.
               </p>
             </div>
 
             <div className="space-y-2">
               <button
-                onClick={() => {
-                  setReviews((prev) => prev.filter((r) => r.id !== actionReview.id));
-                  setActionReview(null);
-                }}
-                className="w-full py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                onClick={handleDeleteReview}
+                disabled={isDeleting}
+                className="w-full py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Remove Review
+                {isDeleting ? "Deleting..." : "Yes, Remove Review"}
               </button>
-              <button
-                onClick={() => {
-                  setReviews((prev) =>
-                    prev.map((r) =>
-                      r.id === actionReview.id ? { ...r, isReported: false } : r
-                    )
-                  );
-                  setActionReview(null);
-                }}
-                className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold rounded-xl transition-colors cursor-pointer"
-              >
-                Dismiss Report
-              </button>
-            </div>
-
-            <div className="pt-2 text-center">
               <button
                 onClick={() => setActionReview(null)}
-                className="text-xs font-semibold text-gray-400 hover:text-black cursor-pointer"
+                disabled={isDeleting}
+                className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold rounded-xl transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
