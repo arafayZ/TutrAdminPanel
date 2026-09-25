@@ -177,12 +177,13 @@ const AdminLogin = () => {
               />
               Remember me
             </label>
-            <a
-              href="#forgot"
-              className="font-semibold text-black hover:underline"
+            <button
+              type="button"
+              onClick={() => navigate("/forgot-password")}
+              className="font-semibold text-black hover:underline cursor-pointer"
             >
               Forgot password?
-            </a>
+            </button>
           </div>
 
           {/* Login Button — with loading state */}

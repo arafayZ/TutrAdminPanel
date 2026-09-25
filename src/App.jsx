@@ -18,7 +18,10 @@ import BlockedPage from "./pages/BlockedPage";
 import ReportsPage from "./pages/ReportsPage";
 import TeamAccessControlPage from "./pages/TeamAccessControlPage";
 import NotificationsPage from "./pages/NotificationsPage";
+import ForgotPassword from "./pages/ForgotPassword";
+
 import SuperAdminRoute from "./components/SuperAdminRoute";
+
 //import Chat from "./pages/Chat";
 
 function App() {
@@ -47,6 +50,7 @@ function App() {
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/reviews" element={<ReviewsPage />} />
         <Route path="/blocked" element={<BlockedPage />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         {/* <Route path="/chat" element={<Chat />} /> */}
 
         {/*  Super-admin-only route */}
