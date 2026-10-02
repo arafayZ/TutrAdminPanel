@@ -606,6 +606,8 @@ const ReportsPage = () => {
                                 }
                                 date={reportDetail.reviewedAt}
                                 active
+                                //   show admin name
+                                adminName={reportDetail.reviewedByAdminName}
                               />
                             )}
                           </div>
@@ -749,16 +751,25 @@ const ReportsPage = () => {
 
                           {(reportDetail.status === "RESOLVED" ||
                             reportDetail.status === "DISMISSED") && (
-                            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-center">
+                            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-center space-y-1">
                               <p className="text-[10px] text-gray-500">
                                 Action Taken
                               </p>
-                              <p className="font-bold text-xs text-gray-900 mt-0.5">
+                              <p className="font-bold text-xs text-gray-900">
                                 {reportDetail.actionTaken
                                   ?.replace(/_/g, " ")
                                   .toLowerCase()
                                   .replace(/\b\w/g, (c) => c.toUpperCase())}
                               </p>
+                              {/* ✅ NEW — resolved by */}
+                              {reportDetail.reviewedByAdminName && (
+                                <p className="text-[10px] text-gray-500 pt-1 border-t border-gray-200 mt-1">
+                                  Resolved by:{" "}
+                                  <span className="font-semibold text-gray-700">
+                                    {reportDetail.reviewedByAdminName}
+                                  </span>
+                                </p>
+                              )}
                             </div>
                           )}
                         </div>
@@ -881,7 +892,7 @@ const StatCard = ({ label, value, sub, subColor }) => (
   </div>
 );
 
-const TimelineItem = ({ label, date, active }) => (
+const TimelineItem = ({ label, date, active, adminName }) => (
   <div className="flex items-start gap-3 text-xs">
     <div
       className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5 ${
@@ -893,6 +904,11 @@ const TimelineItem = ({ label, date, active }) => (
     <div>
       <p className="font-bold text-gray-900 text-xs">{label}</p>
       <p className="text-[10px] text-gray-400">{formatDate(date)}</p>
+      {adminName && (
+        <p className="text-[10px] text-gray-500 mt-0.5">
+          By <span className="font-semibold text-gray-700">{adminName}</span>
+        </p>
+      )}
     </div>
   </div>
 );
