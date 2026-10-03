@@ -1,6 +1,8 @@
 // src/api/adminClient.js
 
-const BASE_URL = 'http://192.168.100.10:8080';
+//export const BASE_URL = 'http://192.168.100.10:8080';
+export const BASE_URL = 'http://192.168.43.166:8080';
+
 
 /**
  * Central fetch wrapper for all admin API calls.

@@ -761,7 +761,6 @@ const ReportsPage = () => {
                                   .toLowerCase()
                                   .replace(/\b\w/g, (c) => c.toUpperCase())}
                               </p>
-                              {/* ✅ NEW — resolved by */}
                               {reportDetail.reviewedByAdminName && (
                                 <p className="text-[10px] text-gray-500 pt-1 border-t border-gray-200 mt-1">
                                   Resolved by:{" "}

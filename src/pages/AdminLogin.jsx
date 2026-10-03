@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { BASE_URL } from "../api/adminClient";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Mail,
@@ -51,14 +52,11 @@ const AdminLogin = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch(
-        "http://192.168.100.10:8080/api/admin/auth/login",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, rememberMe }),
-        },
-      );
+      const response = await fetch(`${BASE_URL}/api/admin/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, rememberMe }),
+      });
 
       const data = await response.json();
 

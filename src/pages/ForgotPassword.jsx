@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { BASE_URL } from "../api/adminClient";
 import { useNavigate } from "react-router-dom";
 import {
   Mail,
@@ -15,7 +16,7 @@ import {
 } from "lucide-react";
 import tutrLogo from "../assets/app_icon1.png";
 
-const API_BASE = "http://192.168.100.10:8080/api/admin/auth";
+const API_BASE = `${BASE_URL}/api/admin/auth`;
 
 // Safe JSON parser — falls back to {} if body isn't JSON
 const safeJson = async (response) => {
