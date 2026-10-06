@@ -28,7 +28,6 @@ const statusLabel = (status) => {
   return status;
 };
 
-// ✅ Detect file type from URL
 const getFileType = (url) => {
   if (!url) return "unknown";
   const clean = url.split("?")[0].toLowerCase();
@@ -87,6 +86,9 @@ const mapFromBackend = (dto) => {
     isBanned,
     uploadedAt: dto.uploadedAt,
     verifiedAt: dto.verifiedAt,
+    // ✅ NEW — who decided (audit trail)
+    verifiedByEmail: dto.verifiedByEmail || null,
+    verifiedByName: dto.verifiedByName || null,
     appliedTime: dto.uploadedAt
       ? `APPLIED ${timeAgo(dto.uploadedAt).toUpperCase()}`
       : "—",
@@ -137,7 +139,7 @@ const Spinner = ({ className = "w-3.5 h-3.5" }) => (
 );
 
 // ============================================================
-// DOCUMENT THUMBNAIL (in card grid)
+// DOCUMENT THUMBNAIL
 // ============================================================
 const DocumentThumbnail = ({ doc, onClick }) => (
   <div
@@ -181,7 +183,6 @@ const DocumentThumbnail = ({ doc, onClick }) => (
       </div>
     )}
 
-    {/* Overlay + label */}
     <div className="absolute inset-0 bg-black/30 group-hover:bg-black/40 transition-colors pointer-events-none"></div>
     <span className="absolute bottom-2 left-2 right-2 text-[9px] font-bold text-white uppercase tracking-wider truncate drop-shadow-xs">
       {doc.title}
@@ -213,6 +214,9 @@ const VerificationRequests = () => {
     message: "",
     action: null,
   });
+
+  // ✅ NEW — conflict modal state (replaces raw alert for 409)
+  const [conflictMessage, setConflictMessage] = useState(null);
 
   const [activeRejectId, setActiveRejectId] = useState(null);
   const [rejectionReasons, setRejectionReasons] = useState({});
@@ -307,6 +311,19 @@ const VerificationRequests = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ✅ NEW — poll active list every 30s so stale tabs self-heal
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Don't clobber a card the admin is currently rejecting
+      if (activeRejectId === null) {
+        fetchRequests();
+        fetchCounts();
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, activeRejectId]);
+
   // ============================================================
   // PROCESSING HELPERS
   // ============================================================
@@ -324,6 +341,33 @@ const VerificationRequests = () => {
       next.delete(id);
       return next;
     });
+  };
+
+  // ============================================================
+  // ✅ NEW — decide response handler (409 -> conflict modal)
+  // ============================================================
+  const handleDecisionResponse = async (res, fallbackMsg) => {
+    if (res.ok) return { ok: true };
+
+    if (res.status === 409) {
+      let msg = "This application was already decided by another admin.";
+      try {
+        const body = await res.json();
+        if (body?.message) msg = body.message;
+      } catch {
+        /* ignore */
+      }
+      return { ok: false, conflict: true, message: msg };
+    }
+
+    let msg = fallbackMsg;
+    try {
+      const body = await res.json();
+      if (body?.message) msg = body.message;
+    } catch {
+      /* ignore */
+    }
+    return { ok: false, conflict: false, message: msg };
   };
 
   // ============================================================
@@ -345,7 +389,20 @@ const VerificationRequests = () => {
               body: JSON.stringify({ status: "APPROVED" }),
             },
           );
-          if (!res.ok) throw new Error("Approve failed");
+
+          const result = await handleDecisionResponse(res, "Approve failed");
+
+          if (!result.ok) {
+            if (result.conflict) {
+              setConflictMessage(result.message);
+              await fetchRequests();
+              await fetchCounts();
+            } else {
+              alert(result.message);
+            }
+            return;
+          }
+
           await fetchRequests();
           await fetchCounts();
         } catch (err) {
@@ -393,7 +450,23 @@ const VerificationRequests = () => {
               }),
             },
           );
-          if (!res.ok) throw new Error("Reject failed");
+
+          const result = await handleDecisionResponse(res, "Reject failed");
+
+          if (!result.ok) {
+            if (result.conflict) {
+              setConflictMessage(result.message);
+              setActiveRejectId(null);
+              setRejectionReasons((prev) => ({ ...prev, [id]: "" }));
+              setPermanentBanFlags((prev) => ({ ...prev, [id]: false }));
+              await fetchRequests();
+              await fetchCounts();
+            } else {
+              alert(result.message);
+            }
+            return;
+          }
+
           setActiveRejectId(null);
           setRejectionReasons((prev) => ({ ...prev, [id]: "" }));
           setPermanentBanFlags((prev) => ({ ...prev, [id]: false }));
@@ -760,21 +833,35 @@ const VerificationRequests = () => {
                             </div>
                           )
                         ) : (
-                          <div className="flex items-center justify-between text-xs px-2 py-1">
-                            <span className="text-gray-400 font-semibold">
-                              Status:
-                            </span>
-                            <span
-                              className={`font-bold ${
-                                activeTab === "Approved"
-                                  ? "text-emerald-600"
-                                  : activeTab === "Banned"
-                                    ? "text-red-800"
-                                    : "text-red-600"
-                              }`}
-                            >
-                              {item.status.toUpperCase()}
-                            </span>
+                          <div>
+                            <div className="flex items-center justify-between text-xs px-2 py-1">
+                              <span className="text-gray-400 font-semibold">
+                                Status:
+                              </span>
+                              <span
+                                className={`font-bold ${
+                                  activeTab === "Approved"
+                                    ? "text-emerald-600"
+                                    : activeTab === "Banned"
+                                      ? "text-red-800"
+                                      : "text-red-600"
+                                }`}
+                              >
+                                {item.status.toUpperCase()}
+                              </span>
+                            </div>
+
+                            {/* ✅ NEW — who decided */}
+                            {item.verifiedByEmail && (
+                              <p className="text-[10px] text-gray-400 mt-1 px-2 text-right">
+                                Decided by{" "}
+                                <span className="font-semibold text-gray-600">
+                                  {item.verifiedByName || item.verifiedByEmail}
+                                </span>
+                                {item.verifiedAt &&
+                                  ` · ${timeAgo(item.verifiedAt)}`}
+                              </p>
+                            )}
                           </div>
                         )}
                       </div>
@@ -970,7 +1057,7 @@ const VerificationRequests = () => {
         </div>
       )}
 
-      {/* ✅ Document Viewer Modal — handles image, PDF, DOC */}
+      {/* Document Viewer Modal */}
       {viewingDocument && (
         <div
           className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
@@ -980,7 +1067,6 @@ const VerificationRequests = () => {
             className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] shadow-2xl relative border border-gray-100 flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <div>
                 <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
@@ -1011,7 +1097,6 @@ const VerificationRequests = () => {
               </div>
             </div>
 
-            {/* Body */}
             <div className="flex-1 overflow-auto p-6 bg-gray-50">
               {viewingDocument.type === "image" ? (
                 <img
@@ -1109,6 +1194,41 @@ const VerificationRequests = () => {
                 Confirm
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ NEW — Conflict Modal (409: already decided by another admin) */}
+      {conflictMessage && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-gray-100 text-center">
+            <div className="w-10 h-10 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-3">
+              <svg
+                className="w-5 h-5 text-amber-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </div>
+            <h3 className="font-bold text-sm text-gray-900 mb-1">
+              Already Decided
+            </h3>
+            <p className="text-xs text-gray-500 mb-5 leading-relaxed">
+              {conflictMessage}
+            </p>
+            <button
+              onClick={() => setConflictMessage(null)}
+              className="w-full py-2.5 bg-black text-white font-semibold text-xs rounded-xl hover:bg-zinc-800 transition-colors cursor-pointer"
+            >
+              OK, refresh
+            </button>
           </div>
         </div>
       )}

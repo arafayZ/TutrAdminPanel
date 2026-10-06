@@ -1,7 +1,7 @@
 // src/api/adminClient.js
 
-//export const BASE_URL = 'http://192.168.100.10:8080';
-export const BASE_URL = 'http://192.168.43.166:8080';
+export const BASE_URL = 'http://192.168.100.10:8080';
+//export const BASE_URL = 'http://192.168.43.166:8080';
 
 
 /**
