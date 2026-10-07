@@ -37,7 +37,6 @@ const timeAgo = (dt) => {
   return `${Math.floor(seconds / 86400)}d ago`;
 };
 
-// Reasons vary by report type
 const getSeverity = (reason) => {
   const high = [
     "HARASSMENT",
@@ -97,28 +96,18 @@ const getStatusLabel = (status) => {
 const ReportsPage = () => {
   const [viewState, setViewState] = useState("reports");
   const [searchQuery, setSearchQuery] = useState("");
-
-  // ✅ NEW — toggle between report types
-  // "tutor" = student reports tutor (default)
-  // "student" = tutor reports student
   const [reportType, setReportType] = useState("tutor");
-
-  // Filter tab: which status we're viewing
   const [activeTab, setActiveTab] = useState("PENDING");
 
-  // Data
   const [reports, setReports] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Detail
   const [selectedReportId, setSelectedReportId] = useState(null);
   const [reportDetail, setReportDetail] = useState(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
 
-  // Admin notes buffer (before submitting action)
   const [adminNotes, setAdminNotes] = useState("");
 
-  // Stats
   const [stats, setStats] = useState({
     pending: 0,
     underReview: 0,
@@ -126,18 +115,45 @@ const ReportsPage = () => {
     totalWarnings: 0,
   });
 
-  // Action modal
   const [modalAction, setModalAction] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Evidence lightbox
   const [lightboxUrl, setLightboxUrl] = useState(null);
 
-  // ✅ NEW — base URL switches based on report type
+  // ✅ NEW — conflict modal state
+  const [conflictMessage, setConflictMessage] = useState(null);
+
   const baseUrl =
     reportType === "tutor"
       ? "/api/admin/reports"
       : "/api/admin/student-reports";
+
+  // ============================================================
+  // ✅ NEW — response helper (mirrors the one in VerificationRequests)
+  // ============================================================
+  const handleReportResponse = async (res, fallbackMsg) => {
+    if (res.ok) return { ok: true };
+
+    if (res.status === 409) {
+      let msg = "This report has already been actioned by another admin.";
+      try {
+        const body = await res.json();
+        if (body?.message) msg = body.message;
+      } catch {
+        /* ignore */
+      }
+      return { ok: false, conflict: true, message: msg };
+    }
+
+    let msg = fallbackMsg;
+    try {
+      const body = await res.json();
+      if (body?.message) msg = body.message;
+    } catch {
+      /* ignore */
+    }
+    return { ok: false, conflict: false, message: msg };
+  };
 
   // ============================================================
   // FETCH REPORTS LIST
@@ -225,7 +241,7 @@ const ReportsPage = () => {
   };
 
   // ============================================================
-  // MARK UNDER REVIEW
+  // ✅ UPDATED — MARK UNDER REVIEW (with 409 handling)
   // ============================================================
   const handleMarkUnderReview = async () => {
     if (!reportDetail) return;
@@ -235,7 +251,22 @@ const ReportsPage = () => {
         `${baseUrl}/${reportDetail.id}/mark-under-review`,
         { method: "PATCH" },
       );
-      if (!res.ok) throw new Error("Failed");
+
+      const result = await handleReportResponse(
+        res,
+        "Failed to mark under review",
+      );
+
+      if (!result.ok) {
+        if (result.conflict) {
+          setConflictMessage(result.message);
+          await fetchReports();
+          await fetchStats();
+        } else {
+          alert(result.message);
+        }
+        return;
+      }
 
       await fetchReports();
       await fetchStats();
@@ -244,13 +275,14 @@ const ReportsPage = () => {
       if (detailRes.ok) setReportDetail(await detailRes.json());
     } catch (err) {
       console.error("Mark under review failed:", err);
+      alert("Failed to mark under review. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   // ============================================================
-  // RESOLVE REPORT
+  // ✅ UPDATED — RESOLVE REPORT (with 409 handling)
   // ============================================================
   const handleResolve = async (action) => {
     if (!reportDetail) return;
@@ -269,13 +301,27 @@ const ReportsPage = () => {
           adminNotes: adminNotes.trim(),
         }),
       });
-      if (!res.ok) throw new Error("Resolve failed");
+
+      const result = await handleReportResponse(res, "Resolve failed");
+
+      if (!result.ok) {
+        if (result.conflict) {
+          setModalAction(null);
+          setConflictMessage(result.message);
+          await fetchReports();
+          await fetchStats();
+        } else {
+          alert(result.message);
+        }
+        return;
+      }
 
       setModalAction(null);
       await fetchReports();
       await fetchStats();
     } catch (err) {
       console.error("Resolve failed:", err);
+      alert("Failed to resolve report. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -318,7 +364,6 @@ const ReportsPage = () => {
                 </p>
               </div>
 
-              {/* ✅ TYPE TOGGLE */}
               <div className="flex bg-gray-100 p-1 rounded-xl w-fit">
                 <button
                   onClick={() => setReportType("tutor")}
@@ -381,7 +426,6 @@ const ReportsPage = () => {
                   </h3>
                 </div>
 
-                {/* TABS */}
                 <div className="flex bg-gray-100 p-1 rounded-xl text-[11px] font-semibold text-gray-500">
                   {[
                     { key: "PENDING", label: "New" },
@@ -403,7 +447,6 @@ const ReportsPage = () => {
                   ))}
                 </div>
 
-                {/* LIST */}
                 <div className="space-y-3 max-h-[600px] overflow-y-auto">
                   {isLoading ? (
                     <div className="py-8 text-center text-gray-400 text-xs">
@@ -418,7 +461,6 @@ const ReportsPage = () => {
                       const isSelected = selectedReportId === item.id;
                       const sev = getSeverity(item.reason);
 
-                      // ✅ Show names in correct order based on report type
                       const fromName = isTutorReport
                         ? item.studentName
                         : item.tutorName;
@@ -482,7 +524,6 @@ const ReportsPage = () => {
                   </div>
                 ) : reportDetail ? (
                   <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-6">
-                    {/* HEADER */}
                     <div className="flex items-start justify-between">
                       <div>
                         <div className="flex items-center gap-2">
@@ -507,9 +548,7 @@ const ReportsPage = () => {
                     <hr className="border-gray-100" />
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {/* MAIN COLUMN */}
                       <div className="md:col-span-2 space-y-6">
-                        {/* DESCRIPTION */}
                         <div>
                           <h4 className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2">
                             Report Details
@@ -519,7 +558,6 @@ const ReportsPage = () => {
                           </p>
                         </div>
 
-                        {/* EVIDENCE */}
                         {reportDetail.evidenceUrls?.length > 0 && (
                           <div>
                             <h4 className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2">
@@ -545,7 +583,6 @@ const ReportsPage = () => {
                           </div>
                         )}
 
-                        {/* RELATED CONNECTION */}
                         {reportDetail.connectionCourseName && (
                           <div>
                             <h4 className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2">
@@ -568,7 +605,6 @@ const ReportsPage = () => {
                           </div>
                         )}
 
-                        {/* ADMIN NOTES */}
                         <div>
                           <h4 className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2">
                             Admin Notes
@@ -586,7 +622,6 @@ const ReportsPage = () => {
                           />
                         </div>
 
-                        {/* TIMELINE */}
                         <div>
                           <h4 className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-3">
                             Status Timeline
@@ -606,7 +641,6 @@ const ReportsPage = () => {
                                 }
                                 date={reportDetail.reviewedAt}
                                 active
-                                //   show admin name
                                 adminName={reportDetail.reviewedByAdminName}
                               />
                             )}
@@ -614,9 +648,7 @@ const ReportsPage = () => {
                         </div>
                       </div>
 
-                      {/* SIDE COLUMN */}
                       <div className="space-y-4 border-l border-gray-100 pl-4">
-                        {/* REPORTER */}
                         <div>
                           <h4 className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2">
                             Reporter ({isTutorReport ? "Student" : "Tutor"})
@@ -660,7 +692,6 @@ const ReportsPage = () => {
                           </div>
                         </div>
 
-                        {/* REPORTED */}
                         <div>
                           <h4 className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-2">
                             Reported {isTutorReport ? "Tutor" : "Student"}
@@ -688,7 +719,6 @@ const ReportsPage = () => {
                           </div>
                         </div>
 
-                        {/* PREVIOUS OFFENSES */}
                         <div className="bg-white border border-gray-100 rounded-xl p-3">
                           <p className="text-[9px] uppercase font-bold text-gray-400">
                             Previous Offenses
@@ -708,7 +738,6 @@ const ReportsPage = () => {
                           )}
                         </div>
 
-                        {/* ACTIONS */}
                         <div className="space-y-2">
                           <h4 className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
                             Moderation Actions
@@ -873,12 +902,47 @@ const ReportsPage = () => {
           </button>
         </div>
       )}
+
+      {/* ✅ NEW — CONFLICT MODAL (409: already actioned by another admin) */}
+      {conflictMessage && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-gray-100 text-center">
+            <div className="w-10 h-10 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-3">
+              <svg
+                className="w-5 h-5 text-amber-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </div>
+            <h3 className="font-bold text-sm text-gray-900 mb-1">
+              Already Actioned
+            </h3>
+            <p className="text-xs text-gray-500 mb-5 leading-relaxed">
+              {conflictMessage}
+            </p>
+            <button
+              onClick={() => setConflictMessage(null)}
+              className="w-full py-2.5 bg-black text-white font-semibold text-xs rounded-xl hover:bg-zinc-800 transition-colors cursor-pointer"
+            >
+              OK, refresh
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 // ============================================================
-// SUB-COMPONENTS
+// SUB-COMPONENTS (unchanged)
 // ============================================================
 
 const StatCard = ({ label, value, sub, subColor }) => (
