@@ -602,7 +602,7 @@ const ReviewsPage = () => {
               <div className="space-y-5">
                 <div className="bg-white p-6 rounded-2xl border border-gray-100 text-center space-y-3">
                   <span className="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider">
-                    AVERAGE PLATFORM RATING
+                    AVERAGE RATING FROM STUDENTS
                   </span>
                   <div className="text-4xl font-extrabold text-gray-900">
                     {stats.averageRating}
