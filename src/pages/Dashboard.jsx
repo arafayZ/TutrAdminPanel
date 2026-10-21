@@ -129,6 +129,7 @@ const Dashboard = () => {
 
   // ---------- Growth badge ----------
   const renderGrowthBadge = (pct) => {
+    // No data to compute
     if (pct === null || pct === undefined) {
       return (
         <span className="px-2 py-1 bg-gray-100 text-gray-500 text-[11px] font-semibold rounded-md">
@@ -136,15 +137,38 @@ const Dashboard = () => {
         </span>
       );
     }
-    const isPositive = pct >= 0;
+
+    // Zero growth — neutral gray, no sign
+    if (pct === 0) {
+      return (
+        <span className="px-2 py-1 bg-gray-100 text-gray-600 text-[11px] font-semibold rounded-md">
+          0%
+        </span>
+      );
+    }
+
+    // No new signups this period (was some in the previous window)
+    if (pct === -100) {
+      return (
+        <span className="px-2 py-1 bg-red-50 text-red-500 text-[11px] font-semibold rounded-md">
+          No new signups
+        </span>
+      );
+    }
+
+    // Negative growth
+    if (pct < 0) {
+      return (
+        <span className="px-2 py-1 bg-red-50 text-red-500 text-[11px] font-semibold rounded-md">
+          ↓ {Math.abs(pct)}%
+        </span>
+      );
+    }
+
+    // Positive growth
     return (
-      <span
-        className={`px-2 py-1 text-[11px] font-semibold rounded-md ${
-          isPositive ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"
-        }`}
-      >
-        {isPositive ? "+" : ""}
-        {pct}%
+      <span className="px-2 py-1 bg-green-50 text-green-600 text-[11px] font-semibold rounded-md">
+        ↑ {pct}%
       </span>
     );
   };
