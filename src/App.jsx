@@ -21,8 +21,7 @@ import NotificationsPage from "./pages/NotificationsPage";
 import ForgotPassword from "./pages/ForgotPassword";
 
 import SuperAdminRoute from "./components/SuperAdminRoute";
-
-//import Chat from "./pages/Chat";
+import AdminRoute from "./components/AdminRoute";
 
 function App() {
   return (
@@ -31,42 +30,38 @@ function App() {
         {/* Default Redirect */}
         <Route path="/" element={<Navigate to="/login" replace />} />
 
-        {/* Auth Route */}
+        {/* ========== PUBLIC ROUTES (no login required) ========== */}
         <Route path="/login" element={<AdminLogin />} />
-
-        {/* Main Console Routes */}
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/notifications" element={<NotificationsPage />} />
-        <Route path="/tutors" element={<TutorManagement />} />
-        <Route
-          path="/tutormanagement"
-          element={<Navigate to="/tutors" replace />}
-        />
-
-        {/* Placeholder Routes for Sidebar Items */}
-        <Route path="/students" element={<StudentManagement />} />
-        <Route path="/verifications" element={<VerificationRequests />} />
-        <Route path="/courses" element={<CourseManagement />} />
-        <Route path="/reports" element={<ReportsPage />} />
-        <Route path="/reviews" element={<ReviewsPage />} />
-        <Route path="/blocked" element={<BlockedPage />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
-        {/* <Route path="/chat" element={<Chat />} /> */}
 
-        {/*  Super-admin-only route */}
-        <Route
-          path="/team"
-          element={
-            <SuperAdminRoute>
-              <TeamAccessControlPage />
-            </SuperAdminRoute>
-          }
-        />
+        {/* ========== PROTECTED ROUTES (require admin_token) ========== */}
+        <Route element={<AdminRoute />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/tutors" element={<TutorManagement />} />
+          <Route
+            path="/tutormanagement"
+            element={<Navigate to="/tutors" replace />}
+          />
+          <Route path="/students" element={<StudentManagement />} />
+          <Route path="/verifications" element={<VerificationRequests />} />
+          <Route path="/courses" element={<CourseManagement />} />
+          <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/reviews" element={<ReviewsPage />} />
+          <Route path="/blocked" element={<BlockedPage />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/help" element={<HelpCenter />} />
 
-        <Route path="/settings" element={<Settings />} />
-
-        {/* Support */}
-        <Route path="/help" element={<HelpCenter />} />
+          {/* Super-admin-only — nested inside AdminRoute */}
+          <Route
+            path="/team"
+            element={
+              <SuperAdminRoute>
+                <TeamAccessControlPage />
+              </SuperAdminRoute>
+            }
+          />
+        </Route>
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/login" replace />} />

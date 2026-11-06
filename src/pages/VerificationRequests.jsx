@@ -61,6 +61,9 @@ const mapFromBackend = (dto) => {
   const displayStatus = isBanned ? "Banned" : statusLabel(dto.status);
 
   const cnicUrl = dto.cnicImageUrl ? getImageUrl(dto.cnicImageUrl) : null;
+  const cnicBackUrl = dto.cnicBackImageUrl
+    ? getImageUrl(dto.cnicBackImageUrl)
+    : null;
   const certUrl = dto.certificateImageUrl
     ? getImageUrl(dto.certificateImageUrl)
     : null;
@@ -101,6 +104,12 @@ const mapFromBackend = (dto) => {
         title: "CNIC",
         type: getFileType(cnicUrl),
         url: cnicUrl,
+      },
+      cnicBackUrl && {
+        id: 3,
+        title: "CNIC (Back)",
+        type: getFileType(cnicBackUrl),
+        url: cnicBackUrl,
       },
       certUrl && {
         id: 2,

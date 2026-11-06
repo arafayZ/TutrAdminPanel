@@ -149,6 +149,7 @@ const mapDetailStudent = (dto) => ({
     instructor: d.instructor,
     basePrice: d.basePrice,
     bidPrice: d.bidPrice,
+    tutorOffer: d.tutorOffer,
     status: d.status,
   })),
 });
@@ -1604,8 +1605,12 @@ const DealCard = ({ deal }) => {
       ? "bg-amber-100 text-amber-700"
       : "bg-blue-100 text-blue-700";
 
+  const hasStudentBid = deal.bidPrice != null && deal.bidPrice > 0;
+  const hasTutorBid = deal.tutorOffer != null && deal.tutorOffer > 0;
+
   return (
     <div className="bg-gray-50/80 border border-gray-100 rounded-xl p-3 space-y-2">
+      {/* Header — course + status */}
       <div className="flex items-start justify-between gap-2">
         <p className="text-xs font-bold text-gray-900 leading-snug">
           {deal.course}
@@ -1617,6 +1622,7 @@ const DealCard = ({ deal }) => {
         </span>
       </div>
 
+      {/* Tags — category + mode */}
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-[9px] bg-gray-200 text-gray-700 font-bold px-1.5 py-0.5 rounded uppercase tracking-wide">
           {deal.category}
@@ -1626,6 +1632,7 @@ const DealCard = ({ deal }) => {
         </span>
       </div>
 
+      {/* Instructor */}
       <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
         <svg
           className="w-3 h-3"
@@ -1643,13 +1650,32 @@ const DealCard = ({ deal }) => {
         <span className="font-medium">{deal.instructor}</span>
       </div>
 
-      <div className="flex items-center justify-end gap-2 pt-1 border-t border-gray-100">
-        <span className="text-[10px] font-medium text-gray-400 line-through">
-          {formatPrice(deal.basePrice)}
-        </span>
-        <span className="text-[11px] font-bold text-green-600">
-          {formatPrice(deal.bidPrice)}
-        </span>
+      {/* Price breakdown — base + both bids */}
+      <div className="space-y-1 pt-1 border-t border-gray-100">
+        <div className="flex items-center justify-between text-[10px]">
+          <span className="text-gray-500 font-medium">Base Price</span>
+          <span className="font-bold text-gray-700">
+            {formatPrice(deal.basePrice)}
+          </span>
+        </div>
+
+        {hasStudentBid && (
+          <div className="flex items-center justify-between text-[10px]">
+            <span className="text-gray-500 font-medium">Student's Bid</span>
+            <span className="font-bold text-blue-600">
+              {formatPrice(deal.bidPrice)}
+            </span>
+          </div>
+        )}
+
+        {hasTutorBid && (
+          <div className="flex items-center justify-between text-[10px]">
+            <span className="text-gray-500 font-medium">Tutor's Bid</span>
+            <span className="font-bold text-amber-600">
+              {formatPrice(deal.tutorOffer)}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
